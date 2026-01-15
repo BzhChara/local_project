@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN"> 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>HTML5 语义化练习</title>
+    <style>
+        /* 使用通配符重置一下边距，让布局更精准 */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif; /* 统一换个好看点的字体 */
+            line-height: 1.6;
+            padding: 20px;
+
+            background-image: url('src/backgrounds/miku-1.jpg');
+            background-attachment: fixed;
+            background-size: cover;
+            background-position: center;
+        }
+
+        /* 语义化标签的样式 */
+        header { 
+            background-color: rgb(173, 216, 230, 0.2);
+            border: 2px solid lightblue;
+            padding: 2rem; 
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .content-section {
+            /* 给整个区块一个半透明白色背景，防止大背景太花看不清内容 */
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 1.5rem;
+            border-radius: 12px; /* 圆角大一点 */
+            margin-bottom: 2rem; /* 区块之间拉开距离 */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* 加个小阴影更有层次感 */
+        }
+
+        .content-text {
+           /* 稍微调整一下这里的颜色，让它看起来更协调 */
+            background-color: rgba(240, 128, 128, 0.2); /* lightcoral 的半透明版 */
+            border: 2px solid lightcoral;
+            font-weight: bold;
+            padding: 1rem 2rem; /* 两边多留点空隙 */
+            list-style-position: inside;
+            border-radius: 8px;
+        }
+
+        /* 居中容器 */
+        .video-container {
+            display: flex;
+            flex-direction: column; /* 让按钮和视频上下排列 */
+            align-items: center;
+            margin: 2rem 0;
+            /* 给视频区域也加个背景框 */
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        iframe {
+            width: 80vw;
+            height: 50vh;
+            border: none; /* 去掉丑丑的边框，用阴影代替 */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            margin-top: 1rem;
+            border-radius: 8px;
+        }
+
+        /* 优化导航链接样式 */
+        nav a {
+            text-decoration: none; /* 去掉下划线 */
+            color: #007bff; /* 链接颜色 */
+            margin: 0 5px;
+        }
+        nav a:hover {
+            text-decoration: underline; /* 鼠标悬停加下划线 */
+        }
+
+        /* 选中所有类型为 text 的输入框 */
+        input[type="text"], input[list="browsers"], select {
+            font-style: normal; /* 取消倾斜，表单还是正体字看着清楚 */
+            color: #333;
+            font-family: inherit; /* 继承 body 的字体 */
+            padding: 8px; /* 增加一点内边距 */
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px; /* 每个框框下面留点空隙 */
+            width: 200px; /*稍微控制一下宽度*/
+        }
+
+        /* 选中提交按钮 */
+        input[type="submit"] {
+            font-weight: bold;
+            cursor: pointer;
+            padding: 10px 20px;
+            background-color: lightcoral;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        input[type="submit"]:hover {
+            background-color: indianred; /* 鼠标悬停变深色 */
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 1rem;
+            background-color: rgba(255,255,255,0.8);
+            border-top: 1px solid #eee;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>
+            
+            <span>项目控制台</span>
+        </h1>
+    </header>
+
+    <main> 
+        <section class="content-section"> 
+            <h2>列表</h2>
+            <ol class="content-text">
+                <li>理解语义化标签</li>
+                <li>掌握 vh/vw 单位</li>
+            </ol>
+        </section>
+
+        <section class="video-container">
+            <!--定义导航链接-->
+            <nav style="font-weight: bold;"> 
+                <a href="https://bilibili.com" target="bilibili">打开 Bilibili</a> |
+                <a href="about:blank" target="bilibili">关闭视频</a>
+            </nav>
+            
+            <iframe src="about:blank" name="bilibili"></iframe>
+        </section>
+
+        <section class="content-section">
+            <h2>表格</h2>
+            <form class="content-text" method="post">
+                <!--组合表单数据-->
+                <fieldset style="padding: 1rem;">
+                    <legend>个人信息</legend>
+                    <p>First Name:</p>
+                    <input type="text" name="firstname" value="Bzh">
+                    <p>LastName:</p>    
+                    <input type="text" name="lastname" value="Chara">
+
+                    <p>Age:</p>
+                    <select name="age">
+                        <optgroup label="青少年">
+                            <option value="0-18" selected>0-18</option>
+                        </optgroup>
+                        
+                        <optgroup label="成年人">
+                            <option value="18-36">18-36</option>
+                            <option value="36-54">36-54</option>
+                        </optgroup>
+                        
+                        <optgroup label="老年人">
+                            <option value="54-72">54-72</option>
+                        <option value="72-100">72-100</option>
+                        </optgroup> 
+                    </select>
+
+                    <p>Gender:</p>
+                    <input type="radio" name="gender" value="male"><span>男</span>
+                    <input type="radio" name="gender" value="female"><span>女</span>
+
+                    <p>Browser:</p>
+                    <input list="browsers" name="browser">
+                    <datalist id="browsers">
+                        <option value="Internet Explorer">
+                        <option value="Firefox">
+                        <option value="Chrome">
+                        <option value="Opera">
+                        <option value="Safari">
+                    </datalist><br>
+
+                    <input type="submit" value="submit"><br>
+                </fieldset>
+            </form>
+        </section>
+    </main>
+
+    <footer id="end">
+        <p>© 2026 我的前端学习笔记</p>
+        <a href="#">回到顶部</a>
+    </footer>
+
+</body>
+</html>

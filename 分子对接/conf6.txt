@@ -1,0 +1,17 @@
+receptor = model.pdbqt
+ligand = 6.pdbqt
+
+out = out6.pdbqt
+
+center_x = 2.792462
+center_y = 17.14846
+center_z = 1.286692
+ 
+size_x = 25
+size_y = 25
+size_z = 25
+ 
+exhaustiveness = 80
+num_modes =1
+seed = 6
+cpu = 1

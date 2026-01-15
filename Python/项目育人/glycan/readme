@@ -1,0 +1,124 @@
+data：存放原始数据，在本例子原始文件使用的test.csv,使用txt存储同样可以
+output：存放输出文件中的内容，其中的文件写入的内容主要在outputfuc.py中定义编辑。
+sugardir：sugar_1-sugar_8是存放各个类型的糖，以及创建向相应糖节点的方法，iterate_tree遍历的方法部分，输出糖链结构中的单糖，二糖，三糖
+createNodeFun是创建糖节点以及添加连接关系。
+sugarnode是主类，是对糖链遍历以及对复杂糖链的处理。
+
+若添加新的糖节点参考以下步骤，以"newsugar"为例子：
+1、首先在sugarnode.py中的glycan = ['Gal', 'Glc', 'Glu', ...]中添加新的单糖种类glycan = ['Gal', 'Glc', 'Glu', 'newsugar',...]
+
+其次有以下两种情况：
+（1）新糖的类型已经定义过，类型的判断主要是可以被连接的位点以及那个节点连接上一个糖
+判断新糖"newsugar"的可以被连接的位点,假设是2，3，4，6位点，则在createNodeFun.py中sugatlistdic = {"glycan_1": ['Gal', 'Glc', 'Gul', 'Man','HexA']，....}中的glycan_1中添加新的糖
+sugatlistdic = {"glycan_1": ['Gal', 'Glc', 'Gul', 'Man','HexA','newsugar'],....},之后就可以正常运行程序。
+（2）新糖的类型没有定义过，类型的判断主要是可以被连接的位点以及那个节点连接上一个糖
+判断新糖"newsugar"的可以被连接的位点,假设是4，6，7，8还未没有定义类型的节点，需要在createNodeFun.py中sugatlistdic = {"glycan_1": ['Gal', 'Glc', 'Gul', 'Man','HexA']，....}中
+创建新的类型glycan_9 如sugatlistdic = {"glycan_1": ['Gal', 'Glc', 'Gul', 'Man','HexA'],"glycan_9":['newsugar']....}。
+然后创建新的类型sugar_9.py,如下代码。
+***************************************************************************
+import sys
+class glycan9():
+    def __init__(self, label):
+        self.label = label
+        self.anomer = {'a': None, 'b': None}
+        self.parent = []
+        self.children_4 = []
+        self.children_6 = []
+        self.children_7 = []
+        self.children_8 = []
+
+        self.childflagnum = 0
+        self.childrenlistdic = {"4": self.children_4,
+                                "6": self.children_6,
+                                "7": self.children_7,
+                                "8": self.children_8
+                                }
+def builtGlycan9Node(label1,sugarlabvalue):
+    Glycan9Node = glycan9(label1[1:-2])#到类
+    if label1[-2] == "a":
+        Glycan9Node.anomer["a"] = "a"
+    elif label1[-2] == "b":
+        Glycan9Node.anomer["b"] = "b"
+    else:
+        print("anomer，不合法，请检查语法")
+        # 程序会终止
+        sys.exit()
+    # 在每个方法里面色设置root,还是在设置第一个节点的时候设置，待定，
+    # 此部分的判断可以设置根节点，根节点的parent设置成root
+    # 注意新糖和上一个糖使用的几号位连接，如果是“2”则把下面的标记变成“2”
+    try:
+        if label1[-1] == "1":#该节点的父亲节点
+            Glycan9Node.parent.append("1")
+        elif label1[-1] == "0":
+            Glycan9Node.parent = "root"
+    except IndexError:
+        print("父节点出现错误")
+        sys.exit()
+    #判断修饰基团
+    Modification_groups = label1[1:len(label1[1:-2]) - len(sugarlabvalue) + 1]
+    search_index = []
+    if 'S' or 's' in Modification_groups:
+        for index, letter in enumerate(Modification_groups):
+            if letter == 'S':
+                search_index.append(index-1)#[1]
+            for SO3_index in search_index:
+                for chidrenkey, chidrenvalue in Glycan9Node.childrenlistdic.items():
+                    if SO3_index == chidrenkey:
+                        chidrenvalue.append("SO3")
+                search_index = []
+        # 判断是否含P
+    if 'P' or 'p' in Modification_groups:
+        for index, letter in enumerate(Modification_groups):
+            if letter == 'P':
+                search_index.append(index - 1)  # [1]
+                for p_indx in search_index:
+                    for chidrenkey, chidrenvalue in Glycan9Node.childrenlistdic.items():
+                        if p_indx == chidrenkey:
+                            chidrenvalue.append("P")
+                    search_index = []
+    for childkey, childvalue in Glycan1Node.childrenlistdic.items():
+        if label1[0] == childkey and len(childvalue) == 0:
+            childvalue.append(childkey)
+            Glycan1Node.childflagnum += 1
+    if Glycan9Node.childflagnum == 0:
+        print("此节点是叶子节点，没有链接孩子")
+    return Glycan9Node
+******************************************************************************
+其次在createNodeFun.py中createNode方法中添加新的判断类型代码如下：
+
+
+******************************************************************************
+elif sugarkey == "glycan_9":
+# 首先对糖节点列表进行判断，要是列表是空的是需要创建节点做为第一个根节点root,同时把第一个节点的父亲节点标记为root
+# 判断是不是为空
+if not sugarnodelist:
+    root = sugar9.builtGlycan9Node(sugarlab,sugarlabvalue)
+    # 创建根节点，根节点的parent 是root,
+    root.parent = "root"
+    root.anomer["a"] = None
+    sugarnodelist.append(root)
+    num[f'num{depth}'] += 1
+else:
+    # 创建新的节点
+    Node9 = sugar8.builtGlycan9Node(sugarlab,sugarlabvalue)
+    # 添加到节点列表
+    sugarnodelist.append(Node1)
+    # 当前层次添加的节点数
+    num[f'num{depth}'] += 1
+    if len(sugarnodelist[-1].parent) != 0 and sugarnodelist[-1].parent[0] == "2":
+        sugarnodelist[-1].parent.append(sugarnodelist[-2])
+    else:
+        print("此节点是非根节点，但此节点没有父节点，因此不能创建父亲")
+
+    if sugarnodelist[-2].childflagnum <= 1:
+        for chidrenkey, chidrenvalue in sugarnodelist[-2].childrenlistdic.items():
+            if len(chidrenvalue) != 0 and chidrenvalue[0] == chidrenkey:
+                del chidrenvalue[0]
+                chidrenvalue.append(sugarnodelist[-1])
+                sugarnodelist[-2].childflagnum -= 1
+    else:
+        print("其中有孩子节点添加失败")
+        continue
+# 节点创建以及链接关系创建完成，继续下一个节点的创建，把label变成空
+print("Node is create")
+******************************************************************************

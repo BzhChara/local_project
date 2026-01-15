@@ -1,0 +1,105 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "GFG",
+            "request": "launch",
+            "mainClass": "GFG",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "ExceptionPropagation",
+            "request": "launch",
+            "mainClass": "ExceptionPropagation",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "ThrowExample",
+            "request": "launch",
+            "mainClass": "ThrowExample",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Stock_Images",
+            "request": "launch",
+            "mainClass": "Stock_Images",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Program_for_Employee_Management_System",
+            "request": "launch",
+            "mainClass": "Program_for_Employee_Management_System",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Tic_Tac_Toe",
+            "request": "launch",
+            "mainClass": "Tic_Tac_Toe",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "variable_two_dimensional_array",
+            "request": "launch",
+            "mainClass": "variable_two_dimensional_array",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Main",
+            "request": "launch",
+            "mainClass": "Main",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "ReturnExample",
+            "request": "launch",
+            "mainClass": "ReturnExample",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Geeks",
+            "request": "launch",
+            "mainClass": "Geeks",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "ABC",
+            "request": "launch",
+            "mainClass": "ABC",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Abc",
+            "request": "launch",
+            "mainClass": "Abc",
+            "projectName": "Java_b7c4909c"
+        },
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "abc",
+            "request": "launch",
+            "mainClass": "abc",
+            "projectName": "Java_b7c4909c"
+        }
+    ]
+}
