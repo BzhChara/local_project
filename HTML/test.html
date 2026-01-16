@@ -70,29 +70,17 @@
         }
 
         /* 优化导航链接样式 */
-        nav a {
+        a {
             text-decoration: none; /* 去掉下划线 */
             color: #007bff; /* 链接颜色 */
             margin: 0 5px;
         }
-        nav a:hover {
+        a:hover {
             text-decoration: underline; /* 鼠标悬停加下划线 */
         }
 
-        /* 选中所有类型为 text 的输入框 */
-        input[type="text"], input[list="browsers"], select {
-            font-style: normal; /* 取消倾斜，表单还是正体字看着清楚 */
-            color: #333;
-            font-family: inherit; /* 继承 body 的字体 */
-            padding: 8px; /* 增加一点内边距 */
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-bottom: 10px; /* 每个框框下面留点空隙 */
-            width: 200px; /*稍微控制一下宽度*/
-        }
-
         /* 选中提交按钮 */
-        input[type="submit"] {
+        button {
             font-weight: bold;
             cursor: pointer;
             padding: 10px 20px;
@@ -102,8 +90,39 @@
             border-radius: 4px;
             margin-top: 10px;
         }
-        input[type="submit"]:hover {
+        button:hover {
             background-color: indianred; /* 鼠标悬停变深色 */
+        }
+
+        img {
+            width: 85vw; 
+            height: 45vh;
+            display: flex;
+            justify-self: center;
+            align-self: center;
+            object-fit: cover;
+            object-position: top;
+        }
+
+        video {
+            width: 85vw; 
+            height: auto; /* 高度根据视频比例自动计算 */
+            display: flex;
+            justify-self: center;
+            align-self: center;
+            object-fit: cover;
+        }
+
+        /* 选中所有类型为 text 的输入框 */
+        input, select {
+            font-style: normal; /* 取消倾斜，表单还是正体字看着清楚 */
+            color: #333;
+            font-family: inherit; /* 继承 body 的字体 */
+            padding: 8px; /* 增加一点内边距 */
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px; /* 每个框框下面留点空隙 */
+            width: 200px; /*稍微控制一下宽度*/
         }
 
         footer {
@@ -125,7 +144,7 @@
     <main> 
         <section class="content-section"> 
             <h2>列表</h2>
-            <ol class="content-text">
+            <ol class="content-text">   
                 <li>理解语义化标签</li>
                 <li>掌握 vh/vw 单位</li>
             </ol>
@@ -142,7 +161,7 @@
         </section>
 
         <section class="content-section">
-            <h2>表格</h2>
+            <h2>表格和输入类型</h2>
             <form class="content-text" method="post">
                 <!--组合表单数据-->
                 <fieldset style="padding: 1rem;">
@@ -170,8 +189,8 @@
                     </select>
 
                     <p>Gender:</p>
-                    <input type="radio" name="gender" value="male"><span>男</span>
-                    <input type="radio" name="gender" value="female"><span>女</span>
+                    <input type="radio" name="gender" value="male" style="width: 20px;"><span>男</span>
+                    <input type="radio" name="gender" value="female" style="width: 20px;"><span>女</span>
 
                     <p>Browser:</p>
                     <input list="browsers" name="browser">
@@ -181,11 +200,70 @@
                         <option value="Chrome">
                         <option value="Opera">
                         <option value="Safari">
-                    </datalist><br>
+                    </datalist>
 
-                    <input type="submit" value="submit"><br>
+                    <p><button type="submit" value="submit">Submit</button></p>
+
+                    <p>Multiple choice of items:</p>
+                    <input type="checkbox" name="vehicle" value="bike" style="width: 20px;"><span>自行车</span>
+                    <input type="checkbox" name="vehicle" value="car" style="width: 20px;"><span>汽车</span>
+
+                    <!--<input type="button>较老，使用button替代。其他组件尚未得知是否也被替换，先用-->
+                    <p>Button click:</p>
+                    <button type="button" onclick="alert('BzhChara')" value="Click me!">Click me!</button>
+
+                    <p>Quantity(between 1 and 5):</p>
+                    <input type="number" name="quantity" min="1" max="5" step="1" value="1">
+
+                    <!--month and week-->
+                    <p>Birthday:</p>
+                    <input type="date" name="birthday" min="2000-01-01">
+
+                    <p>Select your favorite color:</p>
+                    <input type="color" name="favoritecolor" value="#ff0000">
+
+                    <p>Number slider:</p>
+                    <input type="range" name="points" min="0" max="10">
+
+                    <!--datetime and datetime-local-->
+                    <p>Select a time:</p>
+                    <input type="time" name="usr_time">
+
+                    <p>Search Google:</p>
+                    <input type="search" name="googlesearch">
+
+                    <p>E-mail:</p>
+                    <input type="email" name="email">
+
+                    <p>Telephone:</p>
+                    <input type="telephone" name="usrtelephone">
+
+                    <p>Add your homepage:</p>
+                    <input type="url" name="homepage">
                 </fieldset>
             </form>
+        </section>
+            
+        <section class="content-section">
+            <h2>媒体</h2>
+            <div class="content-text">
+                <img src="src/picture/miku-2.jpg" alt="miku-2">
+
+                <p>Undertale:</p>
+                <audio controls="controls"> 
+                    <source src="src/music/Undertale.flac" type="audio/flac">
+                    <span>你的浏览器不支持audio标签</span>
+                </audio>
+
+                <p>Bilibili:</p>
+                <video controls="controls">
+                    <source src="src/video/メズマライザー.mp4" type="audio/mp4">
+                    <span>你的浏览器不支持video标签</span>
+                </video>
+            </div>
+            
+
+
         </section>
     </main>
 
