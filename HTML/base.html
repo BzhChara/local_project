@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+		<style>
+			/* 通用样式：适配手机端，避免溢出 */
+			.container {
+			width: 100%;
+			max-width: 800px;
+			padding: 10px;
+			box-sizing: border-box;
+			margin: 0 auto; /* 外层容器整体居中（可选） */
+			}
+			/* 居中对齐样式 */
+			.content-center {
+			text-align: center; /* 文本/行内元素居中 */
+			/* 若需块级元素居中，补充： */
+			/* width: 80%; margin: 0 auto; */
+			}
+			/* 左对齐样式 */
+			.content-left {
+			text-align: left; /* 文本/行内元素左对齐 */
+			}
+			/* 隐藏样式 */
+			/* .hidden {
+			display: none;
+			} */
+  		</style>
+	</head>
+<body>
+
+	<p id="text" style="text-align: center; font-size: 50px;">
+        这段文字居中且字体大小为 50px
+    </p>
+
+	</body>
+	
+	<script>
+
+		 // 1. 定义业务条件（替换为你的实际判断逻辑，如判断数据、状态等）
+		const condition = true; // true=居中，false=左对齐
+
+		// 2. 获取p标签元素
+		const textElement = document.getElementById('text');
+
+		function b64ToUtf8(b64) {
+			if (!b64) return '';
+			try {
+				// 步骤1：过滤所有非base64合法字符
+				let s = b64.replace(/[^A-Za-z0-9+/=]/g, ''); 
+				// 步骤2：处理URL安全的base64（-替换为+，_替换为/）
+				s = s.replace(/-/g, '+').replace(/_/g, '/');
+				// 步骤3：补位（长度必须是4的倍数，不足补=）
+				const pad = s.length % 4; 
+				if (pad) s += '='.repeat(4 - pad);
+				// 步骤4：解码
+				const bin = atob(s);
+				const bytes = new Uint8Array(bin.length);
+				for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+				return new TextDecoder('utf-8').decode(bytes);
+			} catch (e) {
+				console.error('解码失败：', e);
+				return '';
+			}
+		}
+
+		function getQueryStr(url) {
+			// 1. 处理空值/非字符串（兜底）
+			if (!url || typeof url !== 'string') return '';
+			// 2. 找到?的索引位置
+			const questionMarkIndex = url.indexOf('?');
+			// 3. 无?返回空，有?则截取?之后的部分
+			return questionMarkIndex === -1 ? '' : url.slice(questionMarkIndex + 1);
+		}
+
+		// 适配需求的格式化函数（检测限值、抑制率各占一行）
+		// 100%可运行的完整代码（包含正确的原始文本）
+	function formatTextNc(text) {
+		// 字段列表（必须和原始文本的字段名完全一致，包括中文冒号「：」）
+		const fields = [
+			"通道号：",
+			"样品名称：",
+			"样品编号：",
+			"样品产地：",
+			"被检单位：",
+			"检测项目：",
+			"检测标准：",
+			"检测限值：",
+			"抑制率：",
+			"检测结果：",
+			"检测时间：",
+			"检测单位：",
+			"检测人员："
+		];
+
+		// 清理文本
+		let cleanText = text
+			.replace(/%20/g, ' ')
+			.replace(/=$/, '')
+			.trim();
+
+		// 调试：打印清理后的原始文本（确认文本正确）
+		console.log("=== 清理后的原始文本 ===");
+		console.log(cleanText);
+		console.log("=== 字段匹配情况 ===");
+
+		const result = [];
+		for (let i = 0; i < fields.length; i++) {
+			const field = fields[i];
+			const fieldStart = cleanText.indexOf(field);
+			
+			// 详细调试：打印每个字段的匹配位置
+			console.log(`字段【${field}】→ 匹配位置：${fieldStart}（-1=未匹配）`);
+
+			if (fieldStart === -1) {
+				result.push(`${field}无`);
+				continue;
+			}
+
+			const valueStart = fieldStart + field.length;
+			let valueEnd = cleanText.length;
+			if (i < fields.length - 1) {
+				const nextField = fields[i + 1];
+				const nextFieldStart = cleanText.indexOf(nextField, valueStart);
+				if (nextFieldStart !== -1) {
+					valueEnd = nextFieldStart;
+				}
+			}
+
+			let value = cleanText.substring(valueStart, valueEnd).trim();
+			value = value === '' ? '无' : value;
+			result.push(`${field}${value}`);
+		}
+
+		console.log("=== 最终结果 ===");
+		console.log(result.join('\n'));
+		return result.join('\n');
+	}
+
+	function formatTextJtj(text) {
+		// 字段列表（必须和原始文本的字段名完全一致，包括中文冒号「：」）
+		const fields = [
+			"通道号：",
+			"样品名称：",
+			"样品编号：",
+			"样品产地：",
+			"被检单位：",
+			"检测项目：",
+			"检测标准：",
+			"T/C值：",
+			"检测结果：",
+			"检测时间：",
+			"检测单位：",
+			"检测人员：",
+			"联系方式："
+		];
+
+		// 清理文本
+		let cleanText = text
+			.replace(/%20/g, ' ')
+			.replace(/=$/, '')
+			.trim();
+
+		// 调试：打印清理后的原始文本（确认文本正确）
+		console.log("=== 清理后的原始文本 ===");
+		console.log(cleanText);
+		console.log("=== 字段匹配情况 ===");
+
+		const result = [];
+		for (let i = 0; i < fields.length; i++) {
+			const field = fields[i];
+			const fieldStart = cleanText.indexOf(field);
+			
+			// 详细调试：打印每个字段的匹配位置
+			console.log(`字段【${field}】→ 匹配位置：${fieldStart}（-1=未匹配）`);
+
+			if (fieldStart === -1) {
+				result.push(`${field}无`);
+				continue;
+			}
+
+			const valueStart = fieldStart + field.length;
+			let valueEnd = cleanText.length;
+			if (i < fields.length - 1) {
+				const nextField = fields[i + 1];
+				const nextFieldStart = cleanText.indexOf(nextField, valueStart);
+				if (nextFieldStart !== -1) {
+					valueEnd = nextFieldStart;
+				}
+			}
+
+			let value = cleanText.substring(valueStart, valueEnd).trim();
+			value = value === '' ? '无' : value;
+			result.push(`${field}${value}`);
+		}
+
+		console.log("=== 最终结果 ===");
+		console.log(result.join('\n'));
+		return result.join('\n');
+	}
+
+	function formatTextFftj(text) {
+		// 字段列表（必须和原始文本的字段名完全一致，包括中文冒号「：」）
+		const fields = [
+			"通道号：",
+			"样品名称：",
+			"样品编号：",
+			"样品产地：",
+			"被检单位：",
+			"检测项目：",
+			"检测结果",
+			"检测时间：",
+			"检测单位：",
+			"检测人员：",
+			"联系方式：",
+			"打印时间："
+		];
+
+		// 清理文本
+		let cleanText = text
+			.replace(/%20/g, ' ')
+			.replace(/=$/, '')
+			.trim();
+
+		// 调试：打印清理后的原始文本（确认文本正确）
+		console.log("=== 清理后的原始文本 ===");
+		console.log(cleanText);
+		console.log("=== 字段匹配情况 ===");
+
+		const result = [];
+		for (let i = 0; i < fields.length; i++) {
+			const field = fields[i];
+			const fieldStart = cleanText.indexOf(field);
+			
+			// 详细调试：打印每个字段的匹配位置
+			console.log(`字段【${field}】→ 匹配位置：${fieldStart}（-1=未匹配）`);
+
+			if (fieldStart === -1) {
+				result.push(`${field}无`);
+				continue;
+			}
+
+			const valueStart = fieldStart + field.length;
+			let valueEnd = cleanText.length;
+			if (i < fields.length - 1) {
+				const nextField = fields[i + 1];
+				const nextFieldStart = cleanText.indexOf(nextField, valueStart);
+				if (nextFieldStart !== -1) {
+					valueEnd = nextFieldStart;
+				}
+			}
+
+			let value = cleanText.substring(valueStart, valueEnd).trim();
+			value = value === '' ? '无' : value;
+			result.push(`${field}${value}`);
+		}
+
+		console.log("=== 最终结果 ===");
+		console.log(result.join('\n'));
+		return result.join('\n');
+	}
+
+
+		// 定义需要拆分的字段（按文本中的关键词顺序）
+		const fieldsstxstx = [
+			"通道号：",
+			"样品名称：",
+			"样品编号：",
+			"被检单位：",
+			"样品产地：",
+			"检测项目：",
+			"检测标准：",
+			"检测结果：",
+			"检测单位：",
+			"检测人员：",
+			"检测时间：",
+			"打印时间："
+		];
+
+		// 格式化核心函数
+		function formatTextstx(text) {
+		// 步骤1：去除末尾多余的等号，清理首尾空格
+		let cleanText = text.replace(/=$/, '').trim();
+		let result = [];
+
+		// 步骤2：按字段拆分文本
+		for (let i = 0; i < fieldsstxstx.length; i++) {
+			const field = fieldsstxstx[i];
+			const nextField = fieldsstxstx[i + 1] || ''; // 下一个字段（最后一个字段则为空）
+			
+			// 找到当前字段的起始位置
+			const startIdx = cleanText.indexOf(field) + field.length;
+			// 找到当前字段的结束位置（下一个字段的起始位置）
+			const endIdx = nextField ? cleanText.indexOf(nextField) : cleanText.length;
+			
+			// 截取当前字段的值，清理空格
+			let value = cleanText.substring(startIdx, endIdx).trim();
+			// 补全空值（比如样品产地为空时显示"无"）
+			value = value === '' ? '无' : value;
+			
+			// 拼接字段和值，加入结果数组
+			result.push(`${field}${value}`);
+		}
+
+		// 步骤3：将数组按换行符拼接成最终文本
+		return result.join('\n');
+		}
+
+		// 格式化函数（自动识别字段）
+		function formatAutoFields(text) {
+		// 步骤1：清理多余空格
+		let cleanText = text.replace(/\s+/g, ' ').trim();
+		// 正则匹配：捕获「中文字段名：」+「字段值」（直到下一个「中文字段名：」结束）
+		const regex = /([\u4e00-\u9fa5]+：)(.*?)(?=[\u4e00-\u9fa5]+：|$)/g;
+		let result = [];
+		
+		// 遍历匹配结果
+		let match;
+		while ((match = regex.exec(cleanText)) !== null) {
+			const field = match[1]; // 字段名（如「通道号：」）
+			const value = match[2].trim(); // 字段值（如「3」）
+			result.push(`${field}${value}`);
+		}
+
+		// 按换行符拼接，返回左对齐结果
+		return result.join('\n');
+		}
+
+		//农产品生产者开具的承诺达标合格证样式
+		function formatAutoNext(str) {
+			// 1. 提取并清理核心承诺文本（到“对承诺的真实性负责”为止）
+			const promiseEnd = "兽药残留不超标";
+			const [promiseText, fieldsRaw] = str.split(promiseEnd);
+			const cleanPromise = (promiseText + promiseEnd).replace(/\s+/g, ' ').trim();
+
+			const promiseBase = "承诺依据：<br>□质量安全控制符合要求   □自行检测合格   □委托检测合格";
+
+			// 2. 定义需要单独分行的字段列表（按顺序）
+			const fieldList = ['产品名称', '重量或数量', '产地', '承诺主体', '联系方式', '开具时间'];
+
+			// 3. 逐个拆分字段并清理冗余
+			const fields = [];
+			let remainingText = fieldsRaw || '';
+			fieldList.forEach(fieldName => {
+			// 按当前字段名拆分
+			const splitIndex = remainingText.indexOf(fieldName);
+			if (splitIndex !== -1) {
+				// 截取当前字段值（从“：”后到下一个字段名前）
+				const valueStart = splitIndex + fieldName.length + 1; // +1 跳过“：”
+				const nextField = fieldList.find(name => name !== fieldName && remainingText.indexOf(name) > splitIndex);
+				const valueEnd = nextField ? remainingText.indexOf(nextField) : remainingText.length;
+				
+				// 清理字段值（移除末尾的null=、多余空格）
+				let fieldValue = remainingText.slice(valueStart, valueEnd).replace(/null=?$/, '').trim();
+				fieldValue = fieldValue === 'null' ? '' : fieldValue; 
+				
+				// 拼接字段名+值，加入数组
+				fields.push(`${fieldName}：${fieldValue}`);
+				
+				// 更新剩余文本，继续拆分下一个字段
+				remainingText = remainingText.slice(valueEnd);
+			}
+			});
+
+			// 4. 拼接最终结果（核心承诺 + 每个字段单独一行）
+			// 换行符选择：\n=控制台/纯文本；\r\n=textarea；<br>=HTML
+			const result = [cleanPromise,promiseBase, ...fields].join('<br>');
+			console.log(result);
+			return result;
+		}
+
+		//农产品收购单位（个人）开具的承诺达标合格证样式
+		function formatAutoNextXS(str) {
+			// 1. 提取并清理核心承诺文本（到“对承诺的真实性负责”为止）
+			const promiseEnd = "添加剂等";
+			const [promiseText, fieldsRaw] = str.split(promiseEnd);
+			const cleanPromise = (promiseText + promiseEnd).replace(/\s+/g, ' ').trim();
+
+			const promiseBase = "承诺依据：<br>□质量安全控制符合要求   □自行检测合格   □委托检测合格";
+
+			// 2. 定义需要单独分行的字段列表（按顺序）
+			const fieldList = ['产品名称', '重量或数量', '承诺主体', '联系方式', '开具时间'];
+
+			// 3. 逐个拆分字段并清理冗余
+			const fields = [];
+			let remainingText = fieldsRaw || '';
+			fieldList.forEach(fieldName => {
+			// 按当前字段名拆分
+			const splitIndex = remainingText.indexOf(fieldName);
+			if (splitIndex !== -1) {
+				// 截取当前字段值（从“：”后到下一个字段名前）
+				const valueStart = splitIndex + fieldName.length + 1; // +1 跳过“：”
+				const nextField = fieldList.find(name => name !== fieldName && remainingText.indexOf(name) > splitIndex);
+				const valueEnd = nextField ? remainingText.indexOf(nextField) : remainingText.length;
+				
+				// 清理字段值（移除末尾的null=、多余空格）
+				let fieldValue = remainingText.slice(valueStart, valueEnd).replace(/null=?$/, '').trim();
+				fieldValue = fieldValue === 'null' ? '' : fieldValue;
+				
+				// 拼接字段名+值，加入数组
+				fields.push(`${fieldName}：${fieldValue}`);
+				
+				// 更新剩余文本，继续拆分下一个字段
+				remainingText = remainingText.slice(valueEnd);
+			}
+			});
+
+			// 4. 拼接最终结果（核心承诺 + 每个字段单独一行）
+			// 换行符选择：\n=控制台/纯文本；\r\n=textarea；<br>=HTML
+			const result = [cleanPromise,promiseBase, ...fields].join('<br>');
+			console.log(result);
+			return result;
+		}
+
+		function formatAutoNextstx(str) {
+			// 1. 提取并清理核心承诺文本（到“对承诺的真实性负责”为止）
+			const promiseEnd = "兽药残留不超标";
+			const [promiseText, fieldsRaw] = str.split(promiseEnd);
+			const cleanPromise = (promiseText + promiseEnd).replace(/\s+/g, ' ').trim();
+
+			const promiseBase = "承诺依据：<br>□质量安全控制符合要求   □自行检测合格   □委托检测合格";
+
+			// 2. 定义需要单独分行的字段列表（按顺序）
+			const fieldList = ['产品名称', '重量或数量', '产地','承诺主体', '联系方式', '开具时间'];
+
+			// 3. 逐个拆分字段并清理冗余
+			const fields = [];
+			let remainingText = fieldsRaw || '';
+			fieldList.forEach(fieldName => {
+			// 按当前字段名拆分
+			const splitIndex = remainingText.indexOf(fieldName);
+			if (splitIndex !== -1) {
+				// 截取当前字段值（从“：”后到下一个字段名前）
+				const valueStart = splitIndex + fieldName.length + 1; // +1 跳过“：”
+				const nextField = fieldList.find(name => name !== fieldName && remainingText.indexOf(name) > splitIndex);
+				const valueEnd = nextField ? remainingText.indexOf(nextField) : remainingText.length;
+				
+				// 清理字段值（移除末尾的null=、多余空格）
+				let fieldValue = remainingText.slice(valueStart, valueEnd).replace(/null=?$/, '').trim();
+				fieldValue = fieldValue === 'null' ? '' : fieldValue;
+				
+				// 拼接字段名+值，加入数组
+				fields.push(`${fieldName}：${fieldValue}`);
+				
+				// 更新剩余文本，继续拆分下一个字段
+				remainingText = remainingText.slice(valueEnd);
+			}
+			});
+
+			// 4. 拼接最终结果（核心承诺 + 每个字段单独一行）
+			// 换行符选择：\n=控制台/纯文本；\r\n=textarea；<br>=HTML
+			const result = [cleanPromise,promiseBase, ...fields].join('<br>');
+			console.log(result);
+			return result;
+		}
+		
+		window.onload=function(){
+			var element = document.getElementById('text');
+			var url = location.search; //获取url中"?"符后的字串
+			    var theRequest = new Object();
+				var msg="<p>";
+			    if (url.indexOf("?") != -1) {
+					console.log("当前url值：", url);
+			        // var str = url.substr(1);
+					var str = getQueryStr(url);
+					// str=decodeURIComponent(str);
+					// str=b64ToUtf8(str); //base64比url在汉字编码时字符更少一些。
+
+
+			// 步骤1：先清理末尾的=号（关键前置步骤）
+			let tt = str.replace(/=$/, ''); 
+
+			// 步骤2：优先补%25后的%（核心，先做这个）
+			tt = tt.replace(/%25([0-9A-Fa-f]{2})/gi, '%25%$1'); 
+
+			// 步骤3：再处理其他非法片段（避免反向破坏）
+			tt = tt
+			.replace(/%([^0-9A-Fa-f]{1,2})/gi, '%25$1') // 非十六进制%片段
+			.replace(/%[0-9A-Fa-f]{0,1}$/gi, '')        // 末尾不完整%编码
+			.replace(/%+(?![0-9A-Fa-f]{2})/gi, m => '%25'.repeat(m.length)); // 只处理非有效%的连续%
+
+
+					str=decodeURIComponent(tt);
+					if(str.includes('抑制率')&&condition){
+						textElement.style.textAlign = 'left'; // if：居中
+						textElement.innerText = '这段文字居中且字体大小为 30px'; // 可选：替换if场景的文本
+						msg=formatTextNc(str.replace(/联系方式：.*?打印时间：.*$/, ''));
+						var formattedText = formatTextNc(msg);
+						// 若需在HTML页面中显示（带换行），可将\n替换为<br>
+						var htmlText = formattedText.replace(/\n/g, '<br>');
+						const formattedTexta = formatAutoFields(htmlText)
+						console.log(htmlText);
+						// 比如渲染到页面元素：
+						element.innerHTML = htmlText;
+						// element.innerHTML=msg;
+					}else if(str.includes('T/C值')){
+						textElement.style.textAlign = 'left'; // if：居中
+						textElement.innerText = '这段文字居中且字体大小为 30px'; // 可选：替换if场景的文本
+						msg=formatTextJtj(str.replace(/打印时间：.*$/, ''))
+						var formattedText = formatTextJtj(msg);
+						var htmlText = formattedText.replace(/\n/g, '<br>');
+						const formattedTexta = formatAutoFields(htmlText)
+						console.log(htmlText);
+						element.innerHTML = htmlText;
+					}else if(str.includes('打印时间')){
+						textElement.style.textAlign = 'left'; // if：居中
+						textElement.innerText = '这段文字居中且字体大小为 30px'; // 可选：替换if场景的文本
+						msg=formatTextFftj(str);
+						var formattedText = formatTextFftj(msg);
+						var htmlText = formattedText.replace(/\n/g, '<br>');
+						const formattedTexta = formatAutoFields(htmlText)
+						console.log(htmlText);
+						element.innerHTML = htmlText;
+					}else{
+						textElement.style.textAlign = 'left'; // else：左对齐
+						textElement.innerText = '这段文字左对齐且字体大小为 30px'; // 可选：替换else场景的文本
+						const container = document.getElementById('text-container');
+						if(str.substring(0,5).includes('我承诺生产')){
+							var result = formatAutoNext(str);
+						}else if(str.substring(0,5).includes('我承诺销售')){
+							var result = formatAutoNextXS(str);
+						}else if(str.includes('5oi')){
+							var str = getQueryStr(url);
+							str=decodeURIComponent(str);
+							var result = new TextDecoder('utf-8').decode(Uint8Array.from(atob(str), c => c.charCodeAt(0)));
+							result = formatAutoNextstx(result);
+						}else{
+							var result = new TextDecoder('utf-8').decode(Uint8Array.from(atob(str), c => c.charCodeAt(0)));
+							result = formatTextstx(result);
+							// 若需在HTML页面中显示（带换行），可将\n替换为<br>
+							var htmlText = result.replace(/\n/g, '<br>');
+							result = formatAutoFields(htmlText)
+						}
+						element.innerHTML = result;
+					}
+					
+			        // strs = str.split(/[,，;&\n]/);
+					// console.log("len:"+strs.length)
+			        // for(var i = 0; i < strs.length; i ++) {
+			        //     // theRequest[strs[i].split("=")[0]]=decodeURI(strs[i].split("=")[1]);
+					// 	msg+=strs[i]+"\n";
+					// 	msg+="</p>";	
+			        // }
+					// msg=str.substring(1);
+					// 执行格式化并打印结果
+					console.log(formattedText);
+			    }else{
+					msg="no message";
+				}	
+		}	
+	</script>
+</html>

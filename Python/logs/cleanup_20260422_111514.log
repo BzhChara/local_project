@@ -1,0 +1,6 @@
+2026-04-22 11:15:14,805 [INFO] 运行模式: CLEAN
+2026-04-22 11:15:14,805 [INFO] 日志文件: D:\Microsoft VS Code Projects\Python\logs\cleanup_20260422_111514.log
+2026-04-22 11:15:14,805 [INFO] 排除路径: C:\
+2026-04-22 11:15:15,695 [INFO] 跳过不存在的目标: C:\Users\BZHCHARA\AppData\Local\Mozilla\Firefox\Profiles
+2026-04-22 11:15:16,403 [INFO] 准备删除 0 个文件，预计释放 0.00 B
+2026-04-22 11:15:16,403 [INFO] 删除完成: 0 个文件，释放 0.00 B
