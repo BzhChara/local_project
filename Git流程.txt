@@ -1,0 +1,7 @@
+git init
+git branch -M main
+notepad .gitignore
+git add .
+git commit -m "提交信息"
+git remote add origin https://github.com/BzhChara/仓库名字
+git push -u origin main
