@@ -12,28 +12,18 @@ from led_debugger.protocol import (
     parse_adc_response,
 )
 
-try:
-    import serial
-    from serial.tools import list_ports
-except ModuleNotFoundError:
-    serial = None
-    list_ports = None
+import serial
+from serial.tools import list_ports
 
 
 BAUD_RATE = 115200
 POLL_CHANNELS = range(1, 17)
-READ_TIMEOUT_SECONDS = 0.4
-ROUND_DELAY_SECONDS = 0.1
-
-
-class SerialDependencyError(RuntimeError):
-    """pyserial 未安装时抛出的明确错误。"""
+READ_TIMEOUT_SECONDS = 0.25
+ROUND_DELAY_SECONDS = 0.05
 
 
 def list_serial_ports() -> list[str]:
     """返回当前 Windows 可见串口名称，例如 COM3。"""
-    if list_ports is None:
-        raise SerialDependencyError("缺少 pyserial，请先执行 pip install pyserial")
     return [port.device for port in list_ports.comports()]
 
 
@@ -58,10 +48,6 @@ class SerialPoller(QThread):
         self._running = False
 
     def run(self) -> None:
-        if serial is None:
-            self.error_occurred.emit("缺少 pyserial，请先执行 pip install pyserial")
-            return
-
         self._running = True
         try:
             with serial.Serial(

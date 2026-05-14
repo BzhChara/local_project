@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from led_debugger.data_store import DataStore
-from led_debugger.serial_worker import SerialDependencyError, SerialPoller, list_serial_ports
+from led_debugger.serial_worker import SerialPoller, list_serial_ports
 
 
 def apply_shadow(widget: QWidget, blur_radius: float, y_offset: float, alpha: int) -> QGraphicsDropShadowEffect:
@@ -654,19 +654,14 @@ class MainWindow(QMainWindow):
         self._update_curve()
 
     def _refresh_ports(self) -> None:
-        """刷新可用 COM 口列表，缺少 pyserial 时保持界面可用并提示原因。"""
-        try:
-            self.available_ports = list_serial_ports()
-            self.port_combo.set_items(self.available_ports)
-            if self.serial_poller is None:
-                if self.available_ports:
-                    self.status_label.setText(f"状态：未连接，发现 {len(self.available_ports)} 个COM口")
-                else:
-                    self.status_label.setText("状态：未连接，未发现COM口")
-        except SerialDependencyError as exc:
-            self.available_ports = []
-            self.port_combo.set_items([])
-            self.status_label.setText(f"状态：{exc}")
+        """刷新可用 COM 口列表。"""
+        self.available_ports = list_serial_ports()
+        self.port_combo.set_items(self.available_ports)
+        if self.serial_poller is None:
+            if self.available_ports:
+                self.status_label.setText(f"状态：未连接，发现 {len(self.available_ports)} 个COM口")
+            else:
+                self.status_label.setText("状态：未连接，未发现COM口")
 
     def _toggle_connection(self) -> None:
         """连接或断开串口轮询线程。"""

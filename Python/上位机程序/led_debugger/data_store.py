@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from time import time
 
 
-DEFAULT_MAX_POINTS = 600
+DEFAULT_MAX_POINTS = 500
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class DataStore:
     """保存通道最新值和每个 LED 的内存历史曲线数据。
 
     当前阶段只做运行时内存缓存，不落盘保存。为避免长时间运行无限占用内存，
-    每个通道/LED 默认最多保留最近 600 个点。
+    每个通道/LED 默认最多保留最近 500 个点。
     """
 
     def __init__(self, max_points: int = DEFAULT_MAX_POINTS) -> None:
