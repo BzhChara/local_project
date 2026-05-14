@@ -11,15 +11,20 @@ from led_debugger.protocol import (
     build_read_adc_request,
     parse_adc_response,
 )
+from led_debugger.settings import (
+    DEFAULT_BAUD_RATE,
+    DEFAULT_READ_TIMEOUT_SECONDS,
+    DEFAULT_ROUND_DELAY_SECONDS,
+)
 
 import serial
 from serial.tools import list_ports
 
 
-BAUD_RATE = 115200
+BAUD_RATE = DEFAULT_BAUD_RATE
 POLL_CHANNELS = range(1, 17)
-READ_TIMEOUT_SECONDS = 0.25
-ROUND_DELAY_SECONDS = 0.05
+READ_TIMEOUT_SECONDS = DEFAULT_READ_TIMEOUT_SECONDS
+ROUND_DELAY_SECONDS = DEFAULT_ROUND_DELAY_SECONDS
 
 
 def list_serial_ports() -> list[str]:
@@ -38,9 +43,17 @@ class SerialPoller(QThread):
     status_changed = Signal(str)
     error_occurred = Signal(str)
 
-    def __init__(self, port_name: str, parent=None) -> None:
+    def __init__(
+        self,
+        port_name: str,
+        parent=None,
+        read_timeout_seconds: float = READ_TIMEOUT_SECONDS,
+        round_delay_seconds: float = ROUND_DELAY_SECONDS,
+    ) -> None:
         super().__init__(parent)
         self.port_name = port_name
+        self.read_timeout_seconds = read_timeout_seconds
+        self.round_delay_seconds = round_delay_seconds
         self._running = False
 
     def stop(self) -> None:
@@ -56,8 +69,8 @@ class SerialPoller(QThread):
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=READ_TIMEOUT_SECONDS,
-                write_timeout=READ_TIMEOUT_SECONDS,
+                timeout=self.read_timeout_seconds,
+                write_timeout=self.read_timeout_seconds,
             ) as port:
                 self.status_changed.emit(f"状态：已连接 {self.port_name}")
                 self._poll_loop(port)
@@ -85,7 +98,7 @@ class SerialPoller(QThread):
                 except Exception as exc:
                     self.error_occurred.emit(f"通道 {channel} 串口异常：{exc}")
                     return
-            time.sleep(ROUND_DELAY_SECONDS)
+            time.sleep(self.round_delay_seconds)
 
     def _read_response_frame(self, port) -> bytes:
         """同步读取一帧 5A A5 开头的 ADC 返回数据。"""
@@ -98,7 +111,7 @@ class SerialPoller(QThread):
 
     def _read_until_header(self, port) -> bytes:
         """从串口流中查找返回帧头，丢弃前面的杂散字节。"""
-        deadline = time.monotonic() + READ_TIMEOUT_SECONDS
+        deadline = time.monotonic() + self.read_timeout_seconds
         buffer = bytearray()
         while time.monotonic() < deadline and self._running:
             chunk = port.read(1)

@@ -1,0 +1,16 @@
+{
+  "read_timeout_seconds": 0.25,
+  "round_delay_seconds": 0.05,
+  "curve_visible_seconds": 120.0,
+  "max_points": 500,
+  "remember_last_port": false,
+  "last_port_name": "COM5",
+  "auto_connect_last_port": false,
+  "display_decimals": 3,
+  "curve_show_grid": true,
+  "curve_line_width": 2.0,
+  "y_axis_auto_scale": true,
+  "y_axis_min": 0.0,
+  "y_axis_max": 1.0,
+  "show_serial_errors": true
+}

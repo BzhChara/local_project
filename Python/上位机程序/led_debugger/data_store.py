@@ -4,8 +4,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from time import time
 
-
-DEFAULT_MAX_POINTS = 500
+from led_debugger.settings import DEFAULT_MAX_POINTS
 
 
 @dataclass(frozen=True)
@@ -49,3 +48,20 @@ class DataStore:
     def get_history(self, channel: int, led_index: int) -> list[HistoryPoint]:
         """获取指定通道/LED 的历史点列表，供曲线刷新使用。"""
         return list(self._history[(channel, led_index)])
+
+    def set_max_points(self, max_points: int) -> None:
+        """调整每路历史点上限，并保留已有的最近历史。"""
+        if max_points == self.max_points:
+            return
+        self.max_points = max_points
+        self._history = defaultdict(
+            lambda: deque(maxlen=self.max_points),
+            {
+                key: deque(points, maxlen=self.max_points)
+                for key, points in self._history.items()
+            },
+        )
+
+    def clear_history(self, channel: int, led_index: int) -> None:
+        """清空指定通道/LED 的内存曲线历史。"""
+        self._history[(channel, led_index)].clear()
