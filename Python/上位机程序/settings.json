@@ -1,7 +1,8 @@
 {
   "read_timeout_seconds": 0.25,
   "round_delay_seconds": 0.05,
-  "curve_visible_seconds": 120.0,
+  "channel_delay_seconds": 0.5,
+  "curve_visible_seconds": 600.0,
   "max_points": 500,
   "remember_last_port": false,
   "last_port_name": "COM5",
@@ -12,5 +13,11 @@
   "y_axis_auto_scale": true,
   "y_axis_min": 0.0,
   "y_axis_max": 1.0,
-  "show_serial_errors": true
+  "show_serial_errors": true,
+  "show_raw_serial_view": false,
+  "save_duration_seconds": 600.0,
+  "save_interval_seconds": 10.0,
+  "auto_save_interval": true,
+  "auto_save_duration": true,
+  "auto_curve_visible_seconds": true
 }

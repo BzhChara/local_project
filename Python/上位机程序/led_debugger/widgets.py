@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, Property
+from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRectF, QSize, Qt, Property
 from PySide6.QtGui import (
     QColor,
     QDoubleValidator,
@@ -35,6 +35,65 @@ def apply_shadow(widget: QWidget, blur_radius: float, y_offset: float, alpha: in
     shadow.setColor(QColor(15, 23, 42, alpha))
     widget.setGraphicsEffect(shadow)
     return shadow
+
+
+class ElidedLabel(QLabel):
+    """宽度不足时用 ... 省略显示，完整内容保留在 tooltip。"""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._full_text = ""
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setText(text)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt 接口沿用 Qt 命名。
+        self._full_text = text
+        self.setToolTip(text)
+        self._refresh_elided_text()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt 事件函数沿用 Qt 命名。
+        super().resizeEvent(event)
+        self._refresh_elided_text()
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt 事件函数沿用 Qt 命名。
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._refresh_elided_text()
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt 接口沿用 Qt 命名。
+        hint = super().sizeHint()
+        return QSize(min(hint.width(), 260), hint.height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt 接口沿用 Qt 命名。
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
+
+    def _refresh_elided_text(self) -> None:
+        available_width = self.contentsRect().width()
+        QLabel.setText(self, _elide_right(self._full_text, available_width, self.fontMetrics()))
+
+
+def _elide_right(text: str, available_width: int, metrics) -> str:
+    suffix = "..."
+    if available_width <= 0:
+        return ""
+    if metrics.horizontalAdvance(text) <= available_width:
+        return text
+
+    suffix_width = metrics.horizontalAdvance(suffix)
+    if suffix_width >= available_width:
+        return suffix if suffix_width <= available_width else ""
+
+    low = 0
+    high = len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if metrics.horizontalAdvance(text[:middle]) + suffix_width <= available_width:
+            low = middle
+        else:
+            high = middle - 1
+    return text[:low] + suffix
 
 
 class AcrylicPanel(QFrame):
@@ -549,9 +608,9 @@ class SettingSwitchRow(AcrylicPanel):
         text_layout.addWidget(name_label)
         text_layout.addWidget(description_label)
 
-        self.checkbox = QCheckBox()
+        self.checkbox = ToggleSwitch()
         self.checkbox.setObjectName("settingsSwitch")
-        self.checkbox.setChecked(checked)
+        self.checkbox.set_instant_checked(checked)
 
         layout.addWidget(text_box, 1)
         layout.addWidget(self.checkbox, 0, Qt.AlignRight | Qt.AlignVCenter)
@@ -562,7 +621,85 @@ class SettingSwitchRow(AcrylicPanel):
 
     def set_checked(self, checked: bool) -> None:
         """设置开关状态。"""
-        self.checkbox.setChecked(checked)
+        self.checkbox.set_instant_checked(checked)
+
+
+class ToggleSwitch(QCheckBox):
+    """设置页使用的轻量滑动开关。"""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._thumb_position = 1.0 if self.isChecked() else 0.0
+        self.setFixedSize(44, 24)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
+
+        self._animation = QPropertyAnimation(self, b"thumbPosition", self)
+        self._animation.setDuration(130)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.toggled.connect(self._start_toggle_animation)
+
+    def sizeHint(self):  # noqa: N802 - Qt 命名
+        return self.size()
+
+    def set_instant_checked(self, checked: bool) -> None:
+        """程序刷新设置值时立即同步滑块位置，不播放动画。"""
+        previous_blocked = self.blockSignals(True)
+        self.setChecked(checked)
+        self.blockSignals(previous_blocked)
+        self._animation.stop()
+        self._thumb_position = 1.0 if checked else 0.0
+        self.update()
+
+    def hitButton(self, pos) -> bool:  # noqa: N802 - Qt 命名
+        return self.rect().contains(pos)
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt 事件函数沿用 Qt 命名。
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        track_rect = QRectF(2, 3, self.width() - 4, self.height() - 6)
+        if self.isChecked():
+            track_color = QColor("#334155")
+            border_color = QColor("#475569")
+            thumb_color = QColor("#f8fafc")
+        else:
+            track_color = QColor("#d1d5db")
+            border_color = QColor("#cbd5e1")
+            thumb_color = QColor("#0f172a")
+
+        if not self.isEnabled():
+            track_color.setAlpha(118)
+            border_color.setAlpha(118)
+            thumb_color.setAlpha(128)
+
+        painter.setPen(QPen(border_color, 1.0))
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(track_rect, track_rect.height() / 2, track_rect.height() / 2)
+
+        thumb_size = 14.0
+        left = track_rect.left() + 3.0
+        right = track_rect.right() - thumb_size - 3.0
+        thumb_x = left + (right - left) * self._thumb_position
+        thumb_rect = QRectF(thumb_x, track_rect.center().y() - thumb_size / 2, thumb_size, thumb_size)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(thumb_color)
+        painter.drawEllipse(thumb_rect)
+
+    def _start_toggle_animation(self, checked: bool) -> None:
+        self._animation.stop()
+        self._animation.setStartValue(self._thumb_position)
+        self._animation.setEndValue(1.0 if checked else 0.0)
+        self._animation.start()
+
+    def _get_thumb_position(self) -> float:
+        return self._thumb_position
+
+    def _set_thumb_position(self, value: float) -> None:
+        self._thumb_position = value
+        self.update()
+
+    thumbPosition = Property(float, _get_thumb_position, _set_thumb_position)
 
 
 class SettingActionRow(AcrylicPanel):

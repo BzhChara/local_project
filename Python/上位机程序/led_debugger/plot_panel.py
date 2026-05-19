@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from PySide6.QtWidgets import QLabel, QVBoxLayout
 
 from led_debugger.data_store import HistoryPoint
-from led_debugger.settings import AppSettings
+from led_debugger.settings import AppSettings, effective_curve_visible_seconds
 from led_debugger.widgets import AcrylicPanel
 
 
@@ -94,7 +94,8 @@ class CurvePlotPanel(AcrylicPanel):
             return
 
         latest_timestamp = points[-1].timestamp
-        window_start = latest_timestamp - self.settings.curve_visible_seconds
+        curve_visible_seconds = effective_curve_visible_seconds(self.settings)
+        window_start = latest_timestamp - curve_visible_seconds
         visible_points = [point for point in points if point.timestamp >= window_start]
         x_values = [point.timestamp for point in visible_points]
         y_values = [point.value_ma for point in visible_points]
@@ -109,7 +110,8 @@ class CurvePlotPanel(AcrylicPanel):
     def _reset_curve_axes(self) -> None:
         """无数据时显示最近一段真实时间，避免坐标轴落到 Unix 0 秒。"""
         latest_timestamp = time()
-        window_start = latest_timestamp - self.settings.curve_visible_seconds
+        curve_visible_seconds = effective_curve_visible_seconds(self.settings)
+        window_start = latest_timestamp - curve_visible_seconds
         self.plot_widget.setXRange(window_start, latest_timestamp, padding=0)
         self._apply_curve_y_range([])
 

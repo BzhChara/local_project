@@ -11,7 +11,8 @@ SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 DEFAULT_BAUD_RATE = 115200
 DEFAULT_READ_TIMEOUT_SECONDS = 0.25
 DEFAULT_ROUND_DELAY_SECONDS = 0.05
-DEFAULT_CURVE_VISIBLE_SECONDS = 120.0
+DEFAULT_CHANNEL_DELAY_SECONDS = 0.5
+DEFAULT_CURVE_VISIBLE_SECONDS = 600.0
 DEFAULT_MAX_POINTS = 500
 DEFAULT_DISPLAY_DECIMALS = 3
 DEFAULT_CURVE_SHOW_GRID = True
@@ -22,14 +23,25 @@ DEFAULT_Y_AXIS_MAX = 1.0
 DEFAULT_REMEMBER_LAST_PORT = False
 DEFAULT_AUTO_CONNECT_LAST_PORT = False
 DEFAULT_SHOW_SERIAL_ERRORS = True
+DEFAULT_SHOW_RAW_SERIAL_VIEW = False
+DEFAULT_SAVE_DURATION_SECONDS = 600.0
+DEFAULT_SAVE_INTERVAL_SECONDS = 10.0
+DEFAULT_AUTO_SAVE_INTERVAL = True
+DEFAULT_AUTO_SAVE_DURATION = True
+DEFAULT_AUTO_CURVE_VISIBLE_SECONDS = True
 
 READ_TIMEOUT_RANGE = (0.05, 2.0)
 ROUND_DELAY_RANGE = (0.0, 1.0)
+CHANNEL_DELAY_RANGE = (0.0, 5.0)
 CURVE_VISIBLE_SECONDS_RANGE = (10.0, 3600.0)
 MAX_POINTS_RANGE = (100, 10000)
 DISPLAY_DECIMALS_RANGE = (0, 6)
 CURVE_LINE_WIDTH_RANGE = (1.0, 6.0)
 Y_AXIS_RANGE = (-1000000.0, 1000000.0)
+SAVE_DURATION_RANGE = (1.0, 86400.0)
+SAVE_INTERVAL_RANGE = (0.1, 3600.0)
+SAVE_INTERVAL_CHANNEL_COUNT = 16
+AUTO_DURATION_TARGET_POINTS = 100
 
 
 @dataclass(frozen=True)
@@ -38,6 +50,7 @@ class AppSettings:
 
     read_timeout_seconds: float = DEFAULT_READ_TIMEOUT_SECONDS
     round_delay_seconds: float = DEFAULT_ROUND_DELAY_SECONDS
+    channel_delay_seconds: float = DEFAULT_CHANNEL_DELAY_SECONDS
     curve_visible_seconds: float = DEFAULT_CURVE_VISIBLE_SECONDS
     max_points: int = DEFAULT_MAX_POINTS
     remember_last_port: bool = DEFAULT_REMEMBER_LAST_PORT
@@ -50,6 +63,12 @@ class AppSettings:
     y_axis_min: float = DEFAULT_Y_AXIS_MIN
     y_axis_max: float = DEFAULT_Y_AXIS_MAX
     show_serial_errors: bool = DEFAULT_SHOW_SERIAL_ERRORS
+    show_raw_serial_view: bool = DEFAULT_SHOW_RAW_SERIAL_VIEW
+    save_duration_seconds: float = DEFAULT_SAVE_DURATION_SECONDS
+    save_interval_seconds: float = DEFAULT_SAVE_INTERVAL_SECONDS
+    auto_save_interval: bool = DEFAULT_AUTO_SAVE_INTERVAL
+    auto_save_duration: bool = DEFAULT_AUTO_SAVE_DURATION
+    auto_curve_visible_seconds: bool = DEFAULT_AUTO_CURVE_VISIBLE_SECONDS
 
 
 def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
@@ -75,6 +94,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
         settings = AppSettings(
             read_timeout_seconds=float(values.get("read_timeout_seconds", DEFAULT_READ_TIMEOUT_SECONDS)),
             round_delay_seconds=float(values.get("round_delay_seconds", DEFAULT_ROUND_DELAY_SECONDS)),
+            channel_delay_seconds=float(values.get("channel_delay_seconds", DEFAULT_CHANNEL_DELAY_SECONDS)),
             curve_visible_seconds=float(values.get("curve_visible_seconds", DEFAULT_CURVE_VISIBLE_SECONDS)),
             max_points=int(values.get("max_points", DEFAULT_MAX_POINTS)),
             remember_last_port=bool(values.get("remember_last_port", DEFAULT_REMEMBER_LAST_PORT)),
@@ -87,6 +107,14 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
             y_axis_min=float(values.get("y_axis_min", DEFAULT_Y_AXIS_MIN)),
             y_axis_max=float(values.get("y_axis_max", DEFAULT_Y_AXIS_MAX)),
             show_serial_errors=bool(values.get("show_serial_errors", DEFAULT_SHOW_SERIAL_ERRORS)),
+            show_raw_serial_view=bool(values.get("show_raw_serial_view", DEFAULT_SHOW_RAW_SERIAL_VIEW)),
+            save_duration_seconds=float(values.get("save_duration_seconds", DEFAULT_SAVE_DURATION_SECONDS)),
+            save_interval_seconds=float(values.get("save_interval_seconds", DEFAULT_SAVE_INTERVAL_SECONDS)),
+            auto_save_interval=bool(values.get("auto_save_interval", DEFAULT_AUTO_SAVE_INTERVAL)),
+            auto_save_duration=bool(values.get("auto_save_duration", DEFAULT_AUTO_SAVE_DURATION)),
+            auto_curve_visible_seconds=bool(
+                values.get("auto_curve_visible_seconds", DEFAULT_AUTO_CURVE_VISIBLE_SECONDS)
+            ),
         )
     except (TypeError, ValueError):
         return AppSettings()
@@ -106,6 +134,7 @@ def normalize_settings(settings: AppSettings) -> AppSettings:
     return AppSettings(
         read_timeout_seconds=_clamp_float(settings.read_timeout_seconds, READ_TIMEOUT_RANGE),
         round_delay_seconds=_clamp_float(settings.round_delay_seconds, ROUND_DELAY_RANGE),
+        channel_delay_seconds=_clamp_float(settings.channel_delay_seconds, CHANNEL_DELAY_RANGE),
         curve_visible_seconds=_clamp_float(settings.curve_visible_seconds, CURVE_VISIBLE_SECONDS_RANGE),
         max_points=_clamp_int(settings.max_points, MAX_POINTS_RANGE),
         remember_last_port=bool(settings.remember_last_port),
@@ -118,7 +147,53 @@ def normalize_settings(settings: AppSettings) -> AppSettings:
         y_axis_min=_clamp_float(min(settings.y_axis_min, settings.y_axis_max), Y_AXIS_RANGE),
         y_axis_max=_clamp_float(max(settings.y_axis_min, settings.y_axis_max), Y_AXIS_RANGE),
         show_serial_errors=bool(settings.show_serial_errors),
+        show_raw_serial_view=bool(settings.show_raw_serial_view),
+        save_duration_seconds=_clamp_float(settings.save_duration_seconds, SAVE_DURATION_RANGE),
+        save_interval_seconds=_clamp_float(settings.save_interval_seconds, SAVE_INTERVAL_RANGE),
+        auto_save_interval=bool(settings.auto_save_interval),
+        auto_save_duration=bool(settings.auto_save_duration),
+        auto_curve_visible_seconds=bool(settings.auto_curve_visible_seconds),
     )
+
+
+def calculated_auto_save_interval_seconds(settings: AppSettings) -> float:
+    """按 16 通道轮询设置估算自动保存间隔。"""
+    interval_seconds = settings.channel_delay_seconds * SAVE_INTERVAL_CHANNEL_COUNT + settings.round_delay_seconds
+    return _clamp_float(interval_seconds, SAVE_INTERVAL_RANGE)
+
+
+def effective_save_interval_seconds(settings: AppSettings) -> float:
+    """返回保存时真正使用的时间间隔。"""
+    if settings.auto_save_interval:
+        return calculated_auto_save_interval_seconds(settings)
+    return settings.save_interval_seconds
+
+
+def calculated_auto_save_duration_seconds(settings: AppSettings) -> float:
+    """按实际保存间隔估算自动保存时长。"""
+    return _clamp_float(effective_save_interval_seconds(settings) * AUTO_DURATION_TARGET_POINTS, SAVE_DURATION_RANGE)
+
+
+def effective_save_duration_seconds(settings: AppSettings) -> float:
+    """返回保存时真正使用的保存时长。"""
+    if settings.auto_save_duration:
+        return calculated_auto_save_duration_seconds(settings)
+    return settings.save_duration_seconds
+
+
+def calculated_auto_curve_visible_seconds(settings: AppSettings) -> float:
+    """按实际保存间隔估算自动曲线显示时长。"""
+    return _clamp_float(
+        effective_save_interval_seconds(settings) * AUTO_DURATION_TARGET_POINTS,
+        CURVE_VISIBLE_SECONDS_RANGE,
+    )
+
+
+def effective_curve_visible_seconds(settings: AppSettings) -> float:
+    """返回曲线真正使用的显示时长。"""
+    if settings.auto_curve_visible_seconds:
+        return calculated_auto_curve_visible_seconds(settings)
+    return settings.curve_visible_seconds
 
 
 def _clamp_float(value: float, value_range: tuple[float, float]) -> float:

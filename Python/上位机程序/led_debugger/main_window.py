@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QScrollArea,
     QSizePolicy,
     QSpacerItem,
@@ -32,19 +33,35 @@ from PySide6.QtWidgets import (
 )
 
 from led_debugger.data_store import DataStore
+from led_debugger.exporter import (
+    default_data_dir,
+    existing_export_files,
+    export_all_histories,
+    has_exportable_history,
+    required_history_points,
+)
 from led_debugger.plot_panel import CurvePlotPanel
-from led_debugger.serial_worker import SerialPoller, list_serial_ports
+from led_debugger.raw_serial_panel import RawSerialPanel
+from led_debugger.serial_worker import RawSerialRecord, SerialPoller, list_serial_ports
 from led_debugger.settings import (
+    CHANNEL_DELAY_RANGE,
     CURVE_VISIBLE_SECONDS_RANGE,
     CURVE_LINE_WIDTH_RANGE,
+    DEFAULT_CHANNEL_DELAY_SECONDS,
     DEFAULT_CURVE_VISIBLE_SECONDS,
     DEFAULT_CURVE_LINE_WIDTH,
     DEFAULT_CURVE_SHOW_GRID,
     DEFAULT_DISPLAY_DECIMALS,
     DEFAULT_MAX_POINTS,
+    DEFAULT_AUTO_CURVE_VISIBLE_SECONDS,
+    DEFAULT_AUTO_SAVE_INTERVAL,
+    DEFAULT_AUTO_SAVE_DURATION,
     DEFAULT_READ_TIMEOUT_SECONDS,
     DEFAULT_ROUND_DELAY_SECONDS,
+    DEFAULT_SAVE_DURATION_SECONDS,
+    DEFAULT_SAVE_INTERVAL_SECONDS,
     DEFAULT_SHOW_SERIAL_ERRORS,
+    DEFAULT_SHOW_RAW_SERIAL_VIEW,
     DEFAULT_Y_AXIS_AUTO_SCALE,
     DEFAULT_Y_AXIS_MAX,
     DEFAULT_Y_AXIS_MIN,
@@ -52,8 +69,15 @@ from led_debugger.settings import (
     MAX_POINTS_RANGE,
     READ_TIMEOUT_RANGE,
     ROUND_DELAY_RANGE,
+    SAVE_DURATION_RANGE,
+    SAVE_INTERVAL_RANGE,
     Y_AXIS_RANGE,
     AppSettings,
+    calculated_auto_curve_visible_seconds,
+    calculated_auto_save_duration_seconds,
+    calculated_auto_save_interval_seconds,
+    effective_save_duration_seconds,
+    effective_save_interval_seconds,
     load_settings,
     save_settings,
 )
@@ -62,6 +86,7 @@ from led_debugger.widgets import (
     AcrylicPanel,
     AcrylicSelectButton,
     AcrylicTextButton,
+    ElidedLabel,
     LedCard,
     SettingActionRow,
     SettingInputRow,
@@ -78,7 +103,7 @@ def _colorref(red: int, green: int, blue: int) -> int:
     return red | (green << 8) | (blue << 16)
 
 
-def apply_native_title_bar_style(window: QMainWindow) -> None:
+def apply_native_title_bar_style(window: QWidget) -> None:
     """在支持的 Windows 版本上把原生标题栏设置为浅色。"""
     if sys.platform != "win32":
         return
@@ -156,6 +181,7 @@ class MainWindow(QMainWindow):
         self.available_ports: list[str] = []
         self.settings = load_settings()
         self.data_store = DataStore(max_points=self.settings.max_points)
+        self.raw_serial_records: dict[int, RawSerialRecord] = {}
         self.serial_poller: SerialPoller | None = None
         self.serial_error_count = 0
         self.setWindowTitle("LED亮度检测上位机")
@@ -197,8 +223,13 @@ class MainWindow(QMainWindow):
         self.connect_button.setFixedSize(92, 38)
         self.connect_button.clicked.connect(self._toggle_connection)
 
-        self.status_label = QLabel("状态：未连接")
+        self.status_label = ElidedLabel("状态：未连接")
         self.status_label.setObjectName("statusLabel")
+
+        self.export_button = AcrylicTextButton("保存")
+        self.export_button.setObjectName("exportButton")
+        self.export_button.setFixedSize(92, 38)
+        self.export_button.clicked.connect(self._export_data)
 
         self.settings_button = AcrylicTextButton("设置")
         self.settings_button.setObjectName("settingsButton")
@@ -207,8 +238,9 @@ class MainWindow(QMainWindow):
 
         toolbar.addWidget(self.port_combo)
         toolbar.addWidget(self.connect_button)
-        toolbar.addWidget(self.status_label)
+        toolbar.addWidget(self.status_label, 1)
         toolbar.addItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        toolbar.addWidget(self.export_button)
         toolbar.addWidget(self.settings_button)
 
         apply_shadow(top_bar, blur_radius=30, y_offset=10, alpha=24)
@@ -252,9 +284,16 @@ class MainWindow(QMainWindow):
         cards_panel_layout.addWidget(cards_grid, 1)
 
         self.curve_panel = CurvePlotPanel(self.settings)
+        self.raw_serial_panel = RawSerialPanel()
+        self.right_panel_stack = QStackedWidget()
+        self.right_panel_stack.setObjectName("rightPanelStack")
+        self.right_panel_stack.addWidget(self.curve_panel)
+        self.right_panel_stack.addWidget(self.raw_serial_panel)
+        self._apply_right_panel_mode()
         apply_shadow(self.curve_panel, blur_radius=30, y_offset=10, alpha=24)
+        apply_shadow(self.raw_serial_panel, blur_radius=30, y_offset=10, alpha=24)
         work_area.addWidget(cards_panel, 3)
-        work_area.addWidget(self.curve_panel, 2)
+        work_area.addWidget(self.right_panel_stack, 2)
         content_layout.addLayout(work_area, 1)
 
         # 通道切换按钮固定在面板底部左右两侧，符合用户提出的切换方式。
@@ -322,6 +361,9 @@ class MainWindow(QMainWindow):
             #settingsPageStack {
                 background: transparent;
             }
+            #rightPanelStack {
+                background: transparent;
+            }
             #settingsScroll {
                 background: transparent;
                 border: none;
@@ -334,15 +376,18 @@ class MainWindow(QMainWindow):
                 margin: 4px 0 4px 0;
                 border: none;
                 border-radius: 4px;
-                background: rgba(226, 232, 240, 0.28);
+                background: rgba(226, 232, 240, 0.36);
             }
             #settingsScroll QScrollBar::handle:vertical {
                 min-height: 44px;
                 border-radius: 4px;
-                background: rgba(96, 165, 250, 0.44);
+                background: rgba(100, 116, 139, 0.42);
             }
             #settingsScroll QScrollBar::handle:vertical:hover {
-                background: rgba(59, 130, 246, 0.58);
+                background: rgba(71, 85, 105, 0.58);
+            }
+            #settingsScroll QScrollBar::handle:vertical:pressed {
+                background: rgba(51, 65, 85, 0.65);
             }
             #settingsScroll QScrollBar::add-line:vertical,
             #settingsScroll QScrollBar::sub-line:vertical {
@@ -430,26 +475,29 @@ class MainWindow(QMainWindow):
                 border-color: #ef4444;
                 background: rgba(254, 242, 242, 0.88);
             }
-            #settingsSwitch {
-                background: transparent;
-            }
-            #settingsSwitch::indicator {
-                width: 38px;
-                height: 22px;
-                border-radius: 11px;
-                border: 1px solid rgba(148, 163, 184, 0.86);
-                background: rgba(255, 255, 255, 0.72);
-            }
-            #settingsSwitch::indicator:checked {
-                border-color: rgba(59, 130, 246, 0.92);
-                background: rgba(96, 165, 250, 0.78);
-            }
             #settingsHint {
                 color: #64748b;
                 font-size: 12px;
             }
             #memoryEstimateLabel {
                 color: #64748b;
+                font-size: 12px;
+            }
+            #saveIntervalEstimateLabel {
+                color: #64748b;
+                font-size: 12px;
+            }
+            #curveDurationEstimateLabel {
+                color: #64748b;
+                font-size: 12px;
+            }
+            #rawSerialText {
+                border: 1px solid rgba(148, 163, 184, 0.34);
+                border-radius: 12px;
+                padding: 10px;
+                background: rgba(255, 255, 255, 0.44);
+                color: #0f172a;
+                font-family: "Consolas", "Microsoft YaHei UI", monospace;
                 font-size: 12px;
             }
             """
@@ -579,9 +627,15 @@ class MainWindow(QMainWindow):
         self.curve_seconds_row = SettingInputRow(
             "CURVE_VISIBLE_SECONDS",
             "曲线显示时长",
-            "右侧曲线固定显示最近多少秒的数据，只影响显示窗口，不改变采集。",
+            "关闭自动曲线显示时长后生效，只影响显示窗口，不改变采集。",
             self._format_int(self.settings.curve_visible_seconds),
             curve_seconds_validator,
+        )
+        self.auto_curve_visible_row = SettingSwitchRow(
+            "AUTO_CURVE_VISIBLE_SECONDS",
+            "自动曲线显示时长",
+            "开启后按当前保存间隔估算约 100 个点的显示窗口。",
+            self.settings.auto_curve_visible_seconds,
         )
         self.curve_grid_row = SettingSwitchRow(
             "CURVE_SHOW_GRID",
@@ -624,6 +678,7 @@ class MainWindow(QMainWindow):
         )
 
         for row in (
+            self.auto_curve_visible_row,
             self.curve_seconds_row,
             self.curve_grid_row,
             self.curve_line_width_row,
@@ -633,6 +688,10 @@ class MainWindow(QMainWindow):
             clear_history_row,
         ):
             self._add_settings_row(layout, row)
+        self.curve_duration_estimate_label = QLabel("")
+        self.curve_duration_estimate_label.setObjectName("curveDurationEstimateLabel")
+        self.curve_duration_estimate_label.setWordWrap(True)
+        layout.addWidget(self.curve_duration_estimate_label)
 
         layout.addStretch(1)
         return page
@@ -695,6 +754,8 @@ class MainWindow(QMainWindow):
         read_timeout_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         round_delay_validator = QDoubleValidator(ROUND_DELAY_RANGE[0], ROUND_DELAY_RANGE[1], 2, self)
         round_delay_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        channel_delay_validator = QDoubleValidator(CHANNEL_DELAY_RANGE[0], CHANNEL_DELAY_RANGE[1], 2, self)
+        channel_delay_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
 
         self.read_timeout_row = SettingInputRow(
             "READ_TIMEOUT_SECONDS",
@@ -710,17 +771,32 @@ class MainWindow(QMainWindow):
             self._format_float(self.settings.round_delay_seconds),
             round_delay_validator,
         )
+        self.channel_delay_row = SettingInputRow(
+            "CHANNEL_DELAY_SECONDS",
+            "通道间隔",
+            "每读取一个通道后的等待时间，单位秒。下位机响应不稳定时可设置为 0.5 或 1。",
+            self._format_float(self.settings.channel_delay_seconds),
+            channel_delay_validator,
+        )
         self.show_serial_errors_row = SettingSwitchRow(
             "SHOW_SERIAL_ERRORS",
             "串口读取失败提示到状态栏",
             "开启后读取失败会刷新顶部状态栏；关闭后减少频繁错误提示干扰。",
             self.settings.show_serial_errors,
         )
+        self.show_raw_serial_view_row = SettingSwitchRow(
+            "SHOW_RAW_SERIAL_VIEW",
+            "显示串口原始返回",
+            "开启后右侧区域显示当前通道最近一次 RX 的 HEX 原始字节，用于诊断下位机返回。",
+            self.settings.show_raw_serial_view,
+        )
 
         for row in (
             self.read_timeout_row,
             self.round_delay_row,
+            self.channel_delay_row,
             self.show_serial_errors_row,
+            self.show_raw_serial_view_row,
         ):
             self._add_settings_row(layout, row)
 
@@ -739,6 +815,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(section_title)
 
         max_points_validator = QIntValidator(MAX_POINTS_RANGE[0], MAX_POINTS_RANGE[1], self)
+        save_duration_validator = QDoubleValidator(SAVE_DURATION_RANGE[0], SAVE_DURATION_RANGE[1], 1, self)
+        save_duration_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
+        save_interval_validator = QDoubleValidator(SAVE_INTERVAL_RANGE[0], SAVE_INTERVAL_RANGE[1], 1, self)
+        save_interval_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         self.max_points_row = SettingInputRow(
             "DEFAULT_MAX_POINTS",
             "历史最大点数",
@@ -753,6 +833,53 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.memory_estimate_label)
         self.max_points_row.input.textChanged.connect(self._update_memory_estimate_label)
         self._update_memory_estimate_label()
+
+        self.save_duration_row = SettingInputRow(
+            "SAVE_DURATION_SECONDS",
+            "保存时长",
+            "关闭自动保存时长后生效，点击保存时导出最近多少秒的历史数据。",
+            self._format_float(self.settings.save_duration_seconds),
+            save_duration_validator,
+        )
+        self.auto_save_duration_row = SettingSwitchRow(
+            "AUTO_SAVE_DURATION",
+            "自动保存时长",
+            "开启后按当前保存间隔估算约 100 个点的保存窗口。",
+            self.settings.auto_save_duration,
+        )
+        self.save_interval_row = SettingInputRow(
+            "SAVE_INTERVAL_SECONDS",
+            "保存间隔",
+            "关闭自动保存间隔后生效，按真实采样时间向后查找间隔后的第一个数据点，单位秒。",
+            self._format_float(self.settings.save_interval_seconds),
+            save_interval_validator,
+        )
+        self.auto_save_interval_row = SettingSwitchRow(
+            "AUTO_SAVE_INTERVAL",
+            "自动保存间隔",
+            "开启后按 16 通道轮询节奏估算保存间隔；关闭后使用下方保存间隔。",
+            self.settings.auto_save_interval,
+        )
+        for row in (
+            self.auto_save_duration_row,
+            self.save_duration_row,
+            self.auto_save_interval_row,
+            self.save_interval_row,
+        ):
+            self._add_settings_row(layout, row)
+        self.save_interval_estimate_label = QLabel("")
+        self.save_interval_estimate_label.setObjectName("saveIntervalEstimateLabel")
+        self.save_interval_estimate_label.setWordWrap(True)
+        layout.addWidget(self.save_interval_estimate_label)
+        self.round_delay_row.input.textChanged.connect(self._update_save_interval_estimate_label)
+        self.channel_delay_row.input.textChanged.connect(self._update_save_interval_estimate_label)
+        self.curve_seconds_row.input.textChanged.connect(self._update_save_interval_estimate_label)
+        self.save_duration_row.input.textChanged.connect(self._update_save_interval_estimate_label)
+        self.save_interval_row.input.textChanged.connect(self._update_save_interval_estimate_label)
+        self.auto_curve_visible_row.checkbox.toggled.connect(self._update_save_interval_estimate_label)
+        self.auto_save_duration_row.checkbox.toggled.connect(self._update_save_interval_estimate_label)
+        self.auto_save_interval_row.checkbox.toggled.connect(self._update_save_interval_estimate_label)
+        self._update_save_interval_estimate_label()
 
         layout.addStretch(1)
         return page
@@ -773,7 +900,7 @@ class MainWindow(QMainWindow):
             0: "常用设置保存后立即应用；自动连接会在下一次启动时生效。",
             1: "曲线显示设置保存后立即应用；清空曲线历史只影响当前通道和当前 LED。",
             2: "串口超时和轮询间隔会在下一次连接串口时生效。",
-            3: "高级设置会影响历史缓存和长时间运行的资源占用。",
+            3: "高级设置会影响历史缓存、保存数据和长时间运行的资源占用。",
         }
         self.settings_hint.setText(hints.get(index, ""))
 
@@ -801,11 +928,75 @@ class MainWindow(QMainWindow):
             f"合计 16 通道 x 16 LED，原始数据约 {raw_mb:.2f} MB"
         )
 
+    def _update_save_interval_estimate_label(self, _value=None) -> None:
+        """显示保存/曲线当前将使用的自动估算值。"""
+        try:
+            channel_delay = float(self.channel_delay_row.value_text())
+            round_delay = float(self.round_delay_row.value_text())
+        except ValueError:
+            self.save_interval_estimate_label.setText("当前保存间隔：请输入通道间隔和整轮间隔后估算")
+            self.curve_duration_estimate_label.setText("当前曲线显示时长：请输入通道间隔和整轮间隔后估算")
+            return
+
+        estimated_settings = AppSettings(
+            channel_delay_seconds=channel_delay,
+            round_delay_seconds=round_delay,
+            curve_visible_seconds=self._float_from_row(self.curve_seconds_row, DEFAULT_CURVE_VISIBLE_SECONDS),
+            save_duration_seconds=self._float_from_row(self.save_duration_row, DEFAULT_SAVE_DURATION_SECONDS),
+            save_interval_seconds=self._float_from_row(self.save_interval_row, DEFAULT_SAVE_INTERVAL_SECONDS),
+            auto_save_interval=self.auto_save_interval_row.is_checked(),
+            auto_save_duration=self.auto_save_duration_row.is_checked(),
+            auto_curve_visible_seconds=self.auto_curve_visible_row.is_checked(),
+        )
+        auto_interval = calculated_auto_save_interval_seconds(estimated_settings)
+        save_interval = effective_save_interval_seconds(estimated_settings)
+        save_duration = effective_save_duration_seconds(estimated_settings)
+        curve_duration = calculated_auto_curve_visible_seconds(estimated_settings)
+        if self.auto_save_interval_row.is_checked():
+            self.save_interval_estimate_label.setText(
+                f"当前保存间隔：自动约 {self._format_float(auto_interval)} 秒"
+                f"（16 通道 x 通道间隔 {self._format_float(channel_delay)} 秒 + 整轮间隔 {self._format_float(round_delay)} 秒）"
+            )
+        else:
+            self.save_interval_estimate_label.setText(
+                f"当前保存间隔：手动 {self._format_float(save_interval)} 秒；自动估算为 {self._format_float(auto_interval)} 秒"
+            )
+        if self.auto_save_duration_row.is_checked():
+            self.save_interval_estimate_label.setText(
+                f"{self.save_interval_estimate_label.text()}\n"
+                f"当前保存时长：自动约 {self._format_float(save_duration)} 秒（约 100 个点）"
+            )
+        else:
+            self.save_interval_estimate_label.setText(
+                f"{self.save_interval_estimate_label.text()}\n"
+                f"当前保存时长：手动 {self._format_float(estimated_settings.save_duration_seconds)} 秒；"
+                f"自动估算为 {self._format_float(calculated_auto_save_duration_seconds(estimated_settings))} 秒"
+            )
+
+        if self.auto_curve_visible_row.is_checked():
+            self.curve_duration_estimate_label.setText(
+                f"当前曲线显示时长：自动约 {self._format_float(curve_duration)} 秒（约 100 个点）"
+            )
+        else:
+            self.curve_duration_estimate_label.setText(
+                f"当前曲线显示时长：手动 {self._format_float(estimated_settings.curve_visible_seconds)} 秒；"
+                f"自动估算为 {self._format_float(curve_duration)} 秒"
+            )
+
+    def _float_from_row(self, row: SettingInputRow, fallback: float) -> float:
+        """估算提示使用，输入未完成时临时使用默认值避免提示闪烁报错。"""
+        try:
+            return float(row.value_text())
+        except ValueError:
+            return fallback
+
     def _populate_settings_inputs(self, settings: AppSettings) -> None:
         """用当前设置刷新设置页输入框。"""
         self.read_timeout_row.set_value_text(self._format_float(settings.read_timeout_seconds))
         self.round_delay_row.set_value_text(self._format_float(settings.round_delay_seconds))
+        self.channel_delay_row.set_value_text(self._format_float(settings.channel_delay_seconds))
         self.curve_seconds_row.set_value_text(self._format_int(settings.curve_visible_seconds))
+        self.auto_curve_visible_row.set_checked(settings.auto_curve_visible_seconds)
         self.max_points_row.set_value_text(self._format_int(settings.max_points))
         self.remember_port_row.set_checked(settings.remember_last_port)
         self.auto_connect_row.set_checked(settings.auto_connect_last_port)
@@ -816,6 +1007,12 @@ class MainWindow(QMainWindow):
         self.y_axis_min_row.set_value_text(self._format_float(settings.y_axis_min))
         self.y_axis_max_row.set_value_text(self._format_float(settings.y_axis_max))
         self.show_serial_errors_row.set_checked(settings.show_serial_errors)
+        self.show_raw_serial_view_row.set_checked(settings.show_raw_serial_view)
+        self.save_duration_row.set_value_text(self._format_float(settings.save_duration_seconds))
+        self.save_interval_row.set_value_text(self._format_float(settings.save_interval_seconds))
+        self.auto_save_interval_row.set_checked(settings.auto_save_interval)
+        self.auto_save_duration_row.set_checked(settings.auto_save_duration)
+        self._update_save_interval_estimate_label()
 
     def _show_monitor_page(self, status_text: str | None = None) -> None:
         """切回监测页面。"""
@@ -830,6 +1027,8 @@ class MainWindow(QMainWindow):
         self.channel_label.setText(f"通道 {self.current_channel}")
         self._update_cards_for_current_channel()
         self._update_curve()
+        if self.settings.show_raw_serial_view:
+            self._refresh_raw_serial_panel()
 
     def _select_led(self, led_index: int) -> None:
         """选中一个 LED 卡片，并更新曲线区域标题。"""
@@ -904,6 +1103,7 @@ class MainWindow(QMainWindow):
             AppSettings(
                 read_timeout_seconds=DEFAULT_READ_TIMEOUT_SECONDS,
                 round_delay_seconds=DEFAULT_ROUND_DELAY_SECONDS,
+                channel_delay_seconds=DEFAULT_CHANNEL_DELAY_SECONDS,
                 curve_visible_seconds=DEFAULT_CURVE_VISIBLE_SECONDS,
                 max_points=DEFAULT_MAX_POINTS,
                 display_decimals=DEFAULT_DISPLAY_DECIMALS,
@@ -913,6 +1113,12 @@ class MainWindow(QMainWindow):
                 y_axis_min=DEFAULT_Y_AXIS_MIN,
                 y_axis_max=DEFAULT_Y_AXIS_MAX,
                 show_serial_errors=DEFAULT_SHOW_SERIAL_ERRORS,
+                show_raw_serial_view=DEFAULT_SHOW_RAW_SERIAL_VIEW,
+                save_duration_seconds=DEFAULT_SAVE_DURATION_SECONDS,
+                save_interval_seconds=DEFAULT_SAVE_INTERVAL_SECONDS,
+                auto_save_interval=DEFAULT_AUTO_SAVE_INTERVAL,
+                auto_save_duration=DEFAULT_AUTO_SAVE_DURATION,
+                auto_curve_visible_seconds=DEFAULT_AUTO_CURVE_VISIBLE_SECONDS,
             )
         )
         self.status_label.setText("状态：已填入默认设置，点击保存后生效")
@@ -921,6 +1127,100 @@ class MainWindow(QMainWindow):
         """放弃未保存的输入并回到监测页面。"""
         self._populate_settings_inputs(self.settings)
         self._show_monitor_page("状态：已放弃设置更改")
+
+    def _export_data(self) -> None:
+        """导出所有通道/LED 的历史数据到 Excel。"""
+        if not has_exportable_history(self.data_store):
+            self.status_label.setText("状态：没有可保存的历史数据")
+            return
+
+        save_interval_seconds = effective_save_interval_seconds(self.settings)
+        save_duration_seconds = effective_save_duration_seconds(self.settings)
+        required_points = required_history_points(
+            save_duration_seconds,
+            save_interval_seconds,
+        )
+        if self.settings.max_points < required_points:
+            self.status_label.setText(
+                f"状态：历史最大点数不足，当前 {self.settings.max_points} 点，建议至少 {required_points} 点"
+            )
+            return
+
+        output_dir = default_data_dir()
+        if existing_export_files(output_dir) and not self._confirm_overwrite_export_data():
+            self.status_label.setText("状态：已取消保存")
+            return
+
+        try:
+            summary = export_all_histories(
+                self.data_store,
+                output_dir,
+                save_duration_seconds,
+                save_interval_seconds,
+            )
+        except OSError as exc:
+            self.status_label.setText(f"状态：保存失败：{exc}")
+            return
+
+        self.status_label.setText(
+            f"状态：已保存 {summary.files_written} 个Excel，共 {summary.rows_written} 行，到 {summary.output_dir}"
+        )
+
+    def _confirm_overwrite_export_data(self) -> bool:
+        """显示和主界面风格一致的保存覆盖确认框。"""
+        message_box = QMessageBox(self)
+        message_box.setWindowTitle("覆盖旧数据")
+        message_box.setText("检测到已有保存数据，是否覆盖？")
+        message_box.setIcon(QMessageBox.Icon.Question)
+        message_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        yes_button = message_box.button(QMessageBox.StandardButton.Yes)
+        no_button = message_box.button(QMessageBox.StandardButton.No)
+        if yes_button is not None:
+            yes_button.setText("覆盖")
+            yes_button.setAutoDefault(False)
+            yes_button.setDefault(False)
+        if no_button is not None:
+            no_button.setText("取消")
+            no_button.setAutoDefault(False)
+            no_button.setDefault(False)
+            message_box.setEscapeButton(no_button)
+
+        message_box.setStyleSheet(
+            """
+            QMessageBox {
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 1, y2: 1,
+                    stop: 0 #f8fafc,
+                    stop: 1 #e8eef7
+                );
+                color: #0f172a;
+                font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+                font-size: 14px;
+            }
+            QMessageBox QLabel {
+                color: #0f172a;
+            }
+            QMessageBox QPushButton {
+                min-width: 62px;
+                min-height: 24px;
+                border: 1px solid rgba(203, 213, 225, 0.86);
+                border-radius: 7px;
+                padding: 2px 10px;
+                background: rgba(255, 255, 255, 0.72);
+                color: #0f172a;
+            }
+            QMessageBox QPushButton:hover {
+                border-color: rgba(96, 165, 250, 0.86);
+                background: rgba(239, 246, 255, 0.92);
+            }
+            QMessageBox QPushButton:pressed {
+                background: rgba(219, 234, 254, 0.96);
+            }
+            """
+        )
+        apply_native_title_bar_style(message_box)
+        return message_box.exec() == QMessageBox.StandardButton.Yes
 
     def _save_settings_from_page(self) -> None:
         """校验设置页输入并保存。"""
@@ -945,12 +1245,15 @@ class MainWindow(QMainWindow):
         for row in (
             self.read_timeout_row,
             self.round_delay_row,
+            self.channel_delay_row,
             self.curve_seconds_row,
             self.max_points_row,
             self.display_decimals_row,
             self.curve_line_width_row,
             self.y_axis_min_row,
             self.y_axis_max_row,
+            self.save_duration_row,
+            self.save_interval_row,
         ):
             row.set_error(False)
 
@@ -963,6 +1266,11 @@ class MainWindow(QMainWindow):
             self.round_delay_row,
             ROUND_DELAY_RANGE,
             "ROUND_DELAY_SECONDS",
+        )
+        channel_delay = self._parse_float_setting(
+            self.channel_delay_row,
+            CHANNEL_DELAY_RANGE,
+            "CHANNEL_DELAY_SECONDS",
         )
         curve_seconds = self._parse_int_setting(
             self.curve_seconds_row,
@@ -994,16 +1302,29 @@ class MainWindow(QMainWindow):
             Y_AXIS_RANGE,
             "Y_AXIS_MAX",
         )
+        save_duration = self._parse_float_setting(
+            self.save_duration_row,
+            SAVE_DURATION_RANGE,
+            "SAVE_DURATION_SECONDS",
+        )
+        save_interval = self._parse_float_setting(
+            self.save_interval_row,
+            SAVE_INTERVAL_RANGE,
+            "SAVE_INTERVAL_SECONDS",
+        )
 
         if None in (
             read_timeout,
             round_delay,
+            channel_delay,
             curve_seconds,
             max_points,
             display_decimals,
             curve_line_width,
             y_axis_min,
             y_axis_max,
+            save_duration,
+            save_interval,
         ):
             return None
         if y_axis_min >= y_axis_max:
@@ -1012,9 +1333,28 @@ class MainWindow(QMainWindow):
             self.status_label.setText("状态：Y_AXIS_MIN 必须小于 Y_AXIS_MAX")
             self.y_axis_min_row.input.setFocus()
             return None
+        auto_save_interval = self.auto_save_interval_row.is_checked()
+        auto_save_duration = self.auto_save_duration_row.is_checked()
+        auto_curve_visible_seconds = self.auto_curve_visible_row.is_checked()
+        timing_settings = AppSettings(
+            round_delay_seconds=round_delay,
+            channel_delay_seconds=channel_delay,
+            curve_visible_seconds=float(curve_seconds),
+            save_duration_seconds=save_duration,
+            save_interval_seconds=save_interval,
+            auto_save_interval=auto_save_interval,
+            auto_save_duration=auto_save_duration,
+            auto_curve_visible_seconds=auto_curve_visible_seconds,
+        )
+        if not auto_save_duration and effective_save_interval_seconds(timing_settings) > save_duration:
+            self.save_interval_row.set_error(True)
+            self.status_label.setText("状态：实际保存间隔不能大于 SAVE_DURATION_SECONDS")
+            self.save_interval_row.input.setFocus()
+            return None
         return AppSettings(
             read_timeout_seconds=read_timeout,
             round_delay_seconds=round_delay,
+            channel_delay_seconds=channel_delay,
             curve_visible_seconds=float(curve_seconds),
             max_points=max_points,
             remember_last_port=self.remember_port_row.is_checked(),
@@ -1027,6 +1367,12 @@ class MainWindow(QMainWindow):
             y_axis_min=y_axis_min,
             y_axis_max=y_axis_max,
             show_serial_errors=self.show_serial_errors_row.is_checked(),
+            show_raw_serial_view=self.show_raw_serial_view_row.is_checked(),
+            save_duration_seconds=save_duration,
+            save_interval_seconds=save_interval,
+            auto_save_interval=auto_save_interval,
+            auto_save_duration=auto_save_duration,
+            auto_curve_visible_seconds=auto_curve_visible_seconds,
         )
 
     def _parse_float_setting(
@@ -1076,6 +1422,7 @@ class MainWindow(QMainWindow):
         self.data_store.set_max_points(self.settings.max_points)
         self._apply_display_decimals()
         self._apply_curve_settings()
+        self._apply_right_panel_mode()
 
     def _apply_display_decimals(self) -> None:
         """应用 LED 卡片显示小数位设置。"""
@@ -1085,6 +1432,19 @@ class MainWindow(QMainWindow):
     def _apply_curve_settings(self) -> None:
         """应用曲线显示设置。"""
         self.curve_panel.apply_settings(self.settings)
+
+    def _apply_right_panel_mode(self) -> None:
+        """根据设置切换右侧曲线/串口原始返回视图。"""
+        if self.settings.show_raw_serial_view:
+            self.right_panel_stack.setCurrentWidget(self.raw_serial_panel)
+            self._refresh_raw_serial_panel()
+        else:
+            self.right_panel_stack.setCurrentWidget(self.curve_panel)
+
+    def _refresh_raw_serial_panel(self) -> None:
+        """刷新当前通道的串口原始返回诊断内容。"""
+        self.raw_serial_panel.set_channel(self.current_channel)
+        self.raw_serial_panel.set_record(self.raw_serial_records.get(self.current_channel))
 
     def _clear_current_curve_history(self) -> None:
         """清空当前通道、当前 LED 的内存曲线历史。"""
@@ -1113,8 +1473,10 @@ class MainWindow(QMainWindow):
             self,
             read_timeout_seconds=self.settings.read_timeout_seconds,
             round_delay_seconds=self.settings.round_delay_seconds,
+            channel_delay_seconds=self.settings.channel_delay_seconds,
         )
         self.serial_poller.reading_received.connect(self._handle_reading_received)
+        self.serial_poller.raw_response_received.connect(self._handle_raw_serial_received)
         self.serial_poller.status_changed.connect(self.status_label.setText)
         self.serial_poller.error_occurred.connect(self._handle_serial_error)
         self.serial_poller.finished.connect(self._handle_serial_finished)
@@ -1136,6 +1498,12 @@ class MainWindow(QMainWindow):
         if channel == self.current_channel:
             self._update_cards_for_current_channel()
             self._update_curve()
+
+    def _handle_raw_serial_received(self, channel: int, record: RawSerialRecord) -> None:
+        """记录并显示每个通道最近一次串口原始返回。"""
+        self.raw_serial_records[channel] = record
+        if self.settings.show_raw_serial_view and channel == self.current_channel:
+            self.raw_serial_panel.set_record(record)
 
     def _handle_serial_error(self, message: str) -> None:
         """显示串口错误；轮询线程仍会继续尝试后续通道。"""
