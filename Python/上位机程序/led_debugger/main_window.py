@@ -52,6 +52,7 @@ from led_debugger.settings import (
     DEFAULT_CURVE_LINE_WIDTH,
     DEFAULT_CURVE_SHOW_GRID,
     DEFAULT_DISPLAY_DECIMALS,
+    DEFAULT_FULL_SAVE_MODE,
     DEFAULT_MAX_POINTS,
     DEFAULT_AUTO_CURVE_VISIBLE_SECONDS,
     DEFAULT_AUTO_SAVE_INTERVAL,
@@ -475,6 +476,12 @@ class MainWindow(QMainWindow):
                 border-color: #ef4444;
                 background: rgba(254, 242, 242, 0.88);
             }
+            #settingsInput:disabled {
+                border-color: rgba(203, 213, 225, 0.56);
+                background: rgba(226, 232, 240, 0.52);
+                color: #94a3b8;
+                selection-background-color: rgba(203, 213, 225, 0.72);
+            }
             #settingsHint {
                 color: #64748b;
                 font-size: 12px;
@@ -834,6 +841,12 @@ class MainWindow(QMainWindow):
         self.max_points_row.input.textChanged.connect(self._update_memory_estimate_label)
         self._update_memory_estimate_label()
 
+        self.full_save_mode_row = SettingSwitchRow(
+            "FULL_SAVE_MODE",
+            "全部保存模式",
+            "开启后保存按钮将用于连续记录全部数据；保存时长设置不生效。",
+            self.settings.full_save_mode,
+        )
         self.save_duration_row = SettingInputRow(
             "SAVE_DURATION_SECONDS",
             "保存时长",
@@ -861,6 +874,7 @@ class MainWindow(QMainWindow):
             self.settings.auto_save_interval,
         )
         for row in (
+            self.full_save_mode_row,
             self.auto_save_duration_row,
             self.save_duration_row,
             self.auto_save_interval_row,
@@ -876,10 +890,11 @@ class MainWindow(QMainWindow):
         self.curve_seconds_row.input.textChanged.connect(self._update_save_interval_estimate_label)
         self.save_duration_row.input.textChanged.connect(self._update_save_interval_estimate_label)
         self.save_interval_row.input.textChanged.connect(self._update_save_interval_estimate_label)
-        self.auto_curve_visible_row.checkbox.toggled.connect(self._update_save_interval_estimate_label)
-        self.auto_save_duration_row.checkbox.toggled.connect(self._update_save_interval_estimate_label)
-        self.auto_save_interval_row.checkbox.toggled.connect(self._update_save_interval_estimate_label)
-        self._update_save_interval_estimate_label()
+        self.full_save_mode_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
+        self.auto_curve_visible_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
+        self.auto_save_duration_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
+        self.auto_save_interval_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
+        self._update_auto_setting_input_states()
 
         layout.addStretch(1)
         return page
@@ -952,26 +967,25 @@ class MainWindow(QMainWindow):
         save_interval = effective_save_interval_seconds(estimated_settings)
         save_duration = effective_save_duration_seconds(estimated_settings)
         curve_duration = calculated_auto_curve_visible_seconds(estimated_settings)
+        if self.full_save_mode_row.is_checked():
+            duration_text = "当前保存时长：全部保存模式，不限制时长"
+        elif self.auto_save_duration_row.is_checked():
+            duration_text = f"当前保存时长：自动约 {self._format_float(save_duration)} 秒（约 100 个点）"
+        else:
+            duration_text = (
+                f"当前保存时长：手动 {self._format_float(estimated_settings.save_duration_seconds)} 秒；"
+                f"自动估算为 {self._format_float(calculated_auto_save_duration_seconds(estimated_settings))} 秒"
+            )
         if self.auto_save_interval_row.is_checked():
-            self.save_interval_estimate_label.setText(
+            interval_text = (
                 f"当前保存间隔：自动约 {self._format_float(auto_interval)} 秒"
                 f"（16 通道 x 通道间隔 {self._format_float(channel_delay)} 秒 + 整轮间隔 {self._format_float(round_delay)} 秒）"
             )
         else:
-            self.save_interval_estimate_label.setText(
+            interval_text = (
                 f"当前保存间隔：手动 {self._format_float(save_interval)} 秒；自动估算为 {self._format_float(auto_interval)} 秒"
             )
-        if self.auto_save_duration_row.is_checked():
-            self.save_interval_estimate_label.setText(
-                f"{self.save_interval_estimate_label.text()}\n"
-                f"当前保存时长：自动约 {self._format_float(save_duration)} 秒（约 100 个点）"
-            )
-        else:
-            self.save_interval_estimate_label.setText(
-                f"{self.save_interval_estimate_label.text()}\n"
-                f"当前保存时长：手动 {self._format_float(estimated_settings.save_duration_seconds)} 秒；"
-                f"自动估算为 {self._format_float(calculated_auto_save_duration_seconds(estimated_settings))} 秒"
-            )
+        self.save_interval_estimate_label.setText(f"{duration_text}\n{interval_text}")
 
         if self.auto_curve_visible_row.is_checked():
             self.curve_duration_estimate_label.setText(
@@ -982,6 +996,15 @@ class MainWindow(QMainWindow):
                 f"当前曲线显示时长：手动 {self._format_float(estimated_settings.curve_visible_seconds)} 秒；"
                 f"自动估算为 {self._format_float(curve_duration)} 秒"
             )
+
+    def _update_auto_setting_input_states(self, _value=None) -> None:
+        """自动选项开启时禁用对应的手动输入行。"""
+        full_save_mode = self.full_save_mode_row.is_checked()
+        self.curve_seconds_row.set_row_enabled(not self.auto_curve_visible_row.is_checked())
+        self.auto_save_duration_row.set_row_enabled(not full_save_mode)
+        self.save_duration_row.set_row_enabled(not full_save_mode and not self.auto_save_duration_row.is_checked())
+        self.save_interval_row.set_row_enabled(not self.auto_save_interval_row.is_checked())
+        self._update_save_interval_estimate_label()
 
     def _float_from_row(self, row: SettingInputRow, fallback: float) -> float:
         """估算提示使用，输入未完成时临时使用默认值避免提示闪烁报错。"""
@@ -1010,9 +1033,10 @@ class MainWindow(QMainWindow):
         self.show_raw_serial_view_row.set_checked(settings.show_raw_serial_view)
         self.save_duration_row.set_value_text(self._format_float(settings.save_duration_seconds))
         self.save_interval_row.set_value_text(self._format_float(settings.save_interval_seconds))
+        self.full_save_mode_row.set_checked(settings.full_save_mode)
         self.auto_save_interval_row.set_checked(settings.auto_save_interval)
         self.auto_save_duration_row.set_checked(settings.auto_save_duration)
-        self._update_save_interval_estimate_label()
+        self._update_auto_setting_input_states()
 
     def _show_monitor_page(self, status_text: str | None = None) -> None:
         """切回监测页面。"""
@@ -1119,6 +1143,7 @@ class MainWindow(QMainWindow):
                 auto_save_interval=DEFAULT_AUTO_SAVE_INTERVAL,
                 auto_save_duration=DEFAULT_AUTO_SAVE_DURATION,
                 auto_curve_visible_seconds=DEFAULT_AUTO_CURVE_VISIBLE_SECONDS,
+                full_save_mode=DEFAULT_FULL_SAVE_MODE,
             )
         )
         self.status_label.setText("状态：已填入默认设置，点击保存后生效")
@@ -1257,6 +1282,11 @@ class MainWindow(QMainWindow):
         ):
             row.set_error(False)
 
+        auto_save_interval = self.auto_save_interval_row.is_checked()
+        auto_save_duration = self.auto_save_duration_row.is_checked()
+        auto_curve_visible_seconds = self.auto_curve_visible_row.is_checked()
+        full_save_mode = self.full_save_mode_row.is_checked()
+
         read_timeout = self._parse_float_setting(
             self.read_timeout_row,
             READ_TIMEOUT_RANGE,
@@ -1276,6 +1306,7 @@ class MainWindow(QMainWindow):
             self.curve_seconds_row,
             (int(CURVE_VISIBLE_SECONDS_RANGE[0]), int(CURVE_VISIBLE_SECONDS_RANGE[1])),
             "CURVE_VISIBLE_SECONDS",
+            int(self.settings.curve_visible_seconds) if auto_curve_visible_seconds else None,
         )
         max_points = self._parse_int_setting(
             self.max_points_row,
@@ -1306,11 +1337,13 @@ class MainWindow(QMainWindow):
             self.save_duration_row,
             SAVE_DURATION_RANGE,
             "SAVE_DURATION_SECONDS",
+            self.settings.save_duration_seconds if auto_save_duration or full_save_mode else None,
         )
         save_interval = self._parse_float_setting(
             self.save_interval_row,
             SAVE_INTERVAL_RANGE,
             "SAVE_INTERVAL_SECONDS",
+            self.settings.save_interval_seconds if auto_save_interval else None,
         )
 
         if None in (
@@ -1333,9 +1366,6 @@ class MainWindow(QMainWindow):
             self.status_label.setText("状态：Y_AXIS_MIN 必须小于 Y_AXIS_MAX")
             self.y_axis_min_row.input.setFocus()
             return None
-        auto_save_interval = self.auto_save_interval_row.is_checked()
-        auto_save_duration = self.auto_save_duration_row.is_checked()
-        auto_curve_visible_seconds = self.auto_curve_visible_row.is_checked()
         timing_settings = AppSettings(
             round_delay_seconds=round_delay,
             channel_delay_seconds=channel_delay,
@@ -1346,7 +1376,7 @@ class MainWindow(QMainWindow):
             auto_save_duration=auto_save_duration,
             auto_curve_visible_seconds=auto_curve_visible_seconds,
         )
-        if not auto_save_duration and effective_save_interval_seconds(timing_settings) > save_duration:
+        if not full_save_mode and not auto_save_duration and effective_save_interval_seconds(timing_settings) > save_duration:
             self.save_interval_row.set_error(True)
             self.status_label.setText("状态：实际保存间隔不能大于 SAVE_DURATION_SECONDS")
             self.save_interval_row.input.setFocus()
@@ -1373,6 +1403,7 @@ class MainWindow(QMainWindow):
             auto_save_interval=auto_save_interval,
             auto_save_duration=auto_save_duration,
             auto_curve_visible_seconds=auto_curve_visible_seconds,
+            full_save_mode=full_save_mode,
         )
 
     def _parse_float_setting(
@@ -1380,8 +1411,12 @@ class MainWindow(QMainWindow):
         row: SettingInputRow,
         value_range: tuple[float, float],
         variable_name: str,
+        fallback: float | None = None,
     ) -> float | None:
         """校验浮点参数输入。"""
+        if not row.input.isEnabled() and fallback is not None:
+            row.set_error(False)
+            return fallback
         try:
             value = float(row.value_text())
         except ValueError:
@@ -1401,8 +1436,12 @@ class MainWindow(QMainWindow):
         row: SettingInputRow,
         value_range: tuple[int, int],
         variable_name: str,
+        fallback: int | None = None,
     ) -> int | None:
         """校验整数参数输入。"""
+        if not row.input.isEnabled() and fallback is not None:
+            row.set_error(False)
+            return fallback
         try:
             value = int(row.value_text())
         except ValueError:

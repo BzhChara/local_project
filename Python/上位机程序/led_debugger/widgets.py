@@ -541,15 +541,13 @@ class SettingInputRow(AcrylicPanel):
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(4)
 
-        name_label = QLabel(f"{variable_name}  {title}")
-        name_label.setObjectName("settingName")
-        name_label.setStyleSheet("color: #0f172a; font-weight: 600;")
-        description_label = QLabel(description)
-        description_label.setObjectName("settingDescription")
-        description_label.setStyleSheet("color: #475569; font-size: 12px;")
-        description_label.setWordWrap(True)
-        text_layout.addWidget(name_label)
-        text_layout.addWidget(description_label)
+        self.name_label = QLabel(f"{variable_name}  {title}")
+        self.name_label.setObjectName("settingName")
+        self.description_label = QLabel(description)
+        self.description_label.setObjectName("settingDescription")
+        self.description_label.setWordWrap(True)
+        text_layout.addWidget(self.name_label)
+        text_layout.addWidget(self.description_label)
 
         self.input = QLineEdit(value_text)
         self.input.setObjectName("settingsInput")
@@ -559,6 +557,7 @@ class SettingInputRow(AcrylicPanel):
 
         layout.addWidget(text_box, 1)
         layout.addWidget(self.input, 0, Qt.AlignRight | Qt.AlignVCenter)
+        self.set_row_enabled(True)
 
     def value_text(self) -> str:
         """返回输入框文本。"""
@@ -574,6 +573,17 @@ class SettingInputRow(AcrylicPanel):
         self.input.setProperty("error", has_error)
         self.input.style().unpolish(self.input)
         self.input.style().polish(self.input)
+
+    def set_row_enabled(self, enabled: bool) -> None:
+        """切换整行手动输入是否可用。"""
+        self.input.setEnabled(enabled)
+        self.name_label.setStyleSheet(
+            f"color: {'#0f172a' if enabled else '#94a3b8'}; font-weight: 600;"
+        )
+        self.description_label.setStyleSheet(
+            f"color: {'#475569' if enabled else '#94a3b8'}; font-size: 12px;"
+        )
+        self.set_error(False)
 
 
 class SettingSwitchRow(AcrylicPanel):
@@ -598,15 +608,13 @@ class SettingSwitchRow(AcrylicPanel):
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(4)
 
-        name_label = QLabel(f"{variable_name}  {title}")
-        name_label.setObjectName("settingName")
-        name_label.setStyleSheet("color: #0f172a; font-weight: 600;")
-        description_label = QLabel(description)
-        description_label.setObjectName("settingDescription")
-        description_label.setStyleSheet("color: #475569; font-size: 12px;")
-        description_label.setWordWrap(True)
-        text_layout.addWidget(name_label)
-        text_layout.addWidget(description_label)
+        self.name_label = QLabel(f"{variable_name}  {title}")
+        self.name_label.setObjectName("settingName")
+        self.description_label = QLabel(description)
+        self.description_label.setObjectName("settingDescription")
+        self.description_label.setWordWrap(True)
+        text_layout.addWidget(self.name_label)
+        text_layout.addWidget(self.description_label)
 
         self.checkbox = ToggleSwitch()
         self.checkbox.setObjectName("settingsSwitch")
@@ -614,6 +622,7 @@ class SettingSwitchRow(AcrylicPanel):
 
         layout.addWidget(text_box, 1)
         layout.addWidget(self.checkbox, 0, Qt.AlignRight | Qt.AlignVCenter)
+        self.set_row_enabled(True)
 
     def is_checked(self) -> bool:
         """返回开关状态。"""
@@ -622,6 +631,16 @@ class SettingSwitchRow(AcrylicPanel):
     def set_checked(self, checked: bool) -> None:
         """设置开关状态。"""
         self.checkbox.set_instant_checked(checked)
+
+    def set_row_enabled(self, enabled: bool) -> None:
+        """切换整行开关是否可用。"""
+        self.checkbox.setEnabled(enabled)
+        self.name_label.setStyleSheet(
+            f"color: {'#0f172a' if enabled else '#94a3b8'}; font-weight: 600;"
+        )
+        self.description_label.setStyleSheet(
+            f"color: {'#475569' if enabled else '#94a3b8'}; font-size: 12px;"
+        )
 
 
 class ToggleSwitch(QCheckBox):

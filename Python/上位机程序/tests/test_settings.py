@@ -25,6 +25,7 @@ def test_load_settings_returns_defaults_when_file_missing(tmp_path) -> None:
     assert settings.auto_save_interval is True
     assert settings.auto_save_duration is True
     assert settings.auto_curve_visible_seconds is True
+    assert settings.full_save_mode is False
 
 
 def test_save_and_load_settings_roundtrip(tmp_path) -> None:
@@ -38,6 +39,7 @@ def test_save_and_load_settings_roundtrip(tmp_path) -> None:
         auto_save_interval=False,
         auto_save_duration=False,
         auto_curve_visible_seconds=False,
+        full_save_mode=True,
     )
 
     save_settings(settings, settings_path)
@@ -60,7 +62,8 @@ def test_load_settings_clamps_out_of_range_values(tmp_path) -> None:
           "save_interval_seconds": 10000,
           "auto_save_interval": false,
           "auto_save_duration": false,
-          "auto_curve_visible_seconds": false
+          "auto_curve_visible_seconds": false,
+          "full_save_mode": true
         }
         """,
         encoding="utf-8",
@@ -79,6 +82,7 @@ def test_load_settings_clamps_out_of_range_values(tmp_path) -> None:
     assert settings.auto_save_interval is False
     assert settings.auto_save_duration is False
     assert settings.auto_curve_visible_seconds is False
+    assert settings.full_save_mode is True
 
 
 def test_effective_save_interval_uses_auto_calculation_when_enabled() -> None:
