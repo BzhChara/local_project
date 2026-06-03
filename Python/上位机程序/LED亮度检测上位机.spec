@@ -5,7 +5,7 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('led_debugger\\assets', 'led_debugger\\assets')],
+    datas=[('requirements.txt', '.'), ('settings.json', '.'), ('led_debugger\\assets', 'led_debugger\\assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

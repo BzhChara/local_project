@@ -31,22 +31,23 @@ if __name__ == "__main__":
     if "--show-dependency-check-demo" in sys.argv:
         sys.exit(_show_dependency_check_demo(requirements_path))
 
-    missing = find_missing_requirements(requirements_path)
-    if missing:
-        py_side_missing = any(item.requirement.name.lower() == "pyside6" for item in missing)
-        if py_side_missing:
-            print("缺少 PySide6，无法显示图形化依赖检查窗口。")
-            print(f"请执行：{sys.executable} -m pip install -r {requirements_path}")
-            sys.exit(1)
-
-        if not show_dependency_dialog(missing, requirements_path):
-            sys.exit(1)
-
+    if not getattr(sys, "frozen", False):
         missing = find_missing_requirements(requirements_path)
         if missing:
-            print("依赖仍未满足：")
-            for item in missing:
-                print(f"- {item.requirement.raw_line}：{item.reason}")
+            py_side_missing = any(item.requirement.name.lower() == "pyside6" for item in missing)
+            if py_side_missing:
+                print("缺少 PySide6，无法显示图形化依赖检查窗口。")
+                print(f"请执行：{sys.executable} -m pip install -r {requirements_path}")
+                sys.exit(1)
+
+            if not show_dependency_dialog(missing, requirements_path):
+                sys.exit(1)
+
+            missing = find_missing_requirements(requirements_path)
+            if missing:
+                print("依赖仍未满足：")
+                for item in missing:
+                    print(f"- {item.requirement.raw_line}：{item.reason}")
             sys.exit(1)
 
     from led_debugger.main_window import run

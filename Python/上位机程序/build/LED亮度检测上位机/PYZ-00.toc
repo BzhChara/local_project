@@ -872,6 +872,9 @@
    'D:\\Microsoft VS Code '
    'Projects\\Python\\上位机程序\\led_debugger\\raw_serial_panel.py',
    'PYMODULE'),
+  ('led_debugger.recorder',
+   'D:\\Microsoft VS Code Projects\\Python\\上位机程序\\led_debugger\\recorder.py',
+   'PYMODULE'),
   ('led_debugger.serial_worker',
    'D:\\Microsoft VS Code '
    'Projects\\Python\\上位机程序\\led_debugger\\serial_worker.py',

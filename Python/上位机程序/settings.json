@@ -19,5 +19,6 @@
   "save_interval_seconds": 10.0,
   "auto_save_interval": true,
   "auto_save_duration": true,
-  "auto_curve_visible_seconds": true
+  "auto_curve_visible_seconds": true,
+  "continuous_recording": true
 }

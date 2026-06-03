@@ -4,6 +4,7 @@ import sys
 import ctypes
 from dataclasses import replace
 from pathlib import Path
+from time import time
 
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import (
@@ -42,6 +43,7 @@ from led_debugger.exporter import (
 )
 from led_debugger.plot_panel import CurvePlotPanel
 from led_debugger.raw_serial_panel import RawSerialPanel
+from led_debugger.recorder import ContinuousRecorder, prepare_recording_dir
 from led_debugger.serial_worker import RawSerialRecord, SerialPoller, list_serial_ports
 from led_debugger.settings import (
     CHANNEL_DELAY_RANGE,
@@ -52,7 +54,7 @@ from led_debugger.settings import (
     DEFAULT_CURVE_LINE_WIDTH,
     DEFAULT_CURVE_SHOW_GRID,
     DEFAULT_DISPLAY_DECIMALS,
-    DEFAULT_FULL_SAVE_MODE,
+    DEFAULT_CONTINUOUS_RECORDING,
     DEFAULT_MAX_POINTS,
     DEFAULT_AUTO_CURVE_VISIBLE_SECONDS,
     DEFAULT_AUTO_SAVE_INTERVAL,
@@ -183,6 +185,7 @@ class MainWindow(QMainWindow):
         self.settings = load_settings()
         self.data_store = DataStore(max_points=self.settings.max_points)
         self.raw_serial_records: dict[int, RawSerialRecord] = {}
+        self.continuous_recorder: ContinuousRecorder | None = None
         self.serial_poller: SerialPoller | None = None
         self.serial_error_count = 0
         self.setWindowTitle("LED亮度检测上位机")
@@ -841,11 +844,11 @@ class MainWindow(QMainWindow):
         self.max_points_row.input.textChanged.connect(self._update_memory_estimate_label)
         self._update_memory_estimate_label()
 
-        self.full_save_mode_row = SettingSwitchRow(
-            "FULL_SAVE_MODE",
-            "全部保存模式",
-            "开启后保存按钮将用于连续记录全部数据；保存时长设置不生效。",
-            self.settings.full_save_mode,
+        self.continuous_recording_row = SettingSwitchRow(
+            "CONTINUOUS_RECORDING",
+            "连续记录模式",
+            "开启后保存按钮用于开始/停止连续记录；保存时长设置不生效。",
+            self.settings.continuous_recording,
         )
         self.save_duration_row = SettingInputRow(
             "SAVE_DURATION_SECONDS",
@@ -874,7 +877,7 @@ class MainWindow(QMainWindow):
             self.settings.auto_save_interval,
         )
         for row in (
-            self.full_save_mode_row,
+            self.continuous_recording_row,
             self.auto_save_duration_row,
             self.save_duration_row,
             self.auto_save_interval_row,
@@ -890,7 +893,7 @@ class MainWindow(QMainWindow):
         self.curve_seconds_row.input.textChanged.connect(self._update_save_interval_estimate_label)
         self.save_duration_row.input.textChanged.connect(self._update_save_interval_estimate_label)
         self.save_interval_row.input.textChanged.connect(self._update_save_interval_estimate_label)
-        self.full_save_mode_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
+        self.continuous_recording_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
         self.auto_curve_visible_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
         self.auto_save_duration_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
         self.auto_save_interval_row.checkbox.toggled.connect(self._update_auto_setting_input_states)
@@ -967,8 +970,8 @@ class MainWindow(QMainWindow):
         save_interval = effective_save_interval_seconds(estimated_settings)
         save_duration = effective_save_duration_seconds(estimated_settings)
         curve_duration = calculated_auto_curve_visible_seconds(estimated_settings)
-        if self.full_save_mode_row.is_checked():
-            duration_text = "当前保存时长：全部保存模式，不限制时长"
+        if self.continuous_recording_row.is_checked():
+            duration_text = "当前保存时长：连续记录模式，不限制时长"
         elif self.auto_save_duration_row.is_checked():
             duration_text = f"当前保存时长：自动约 {self._format_float(save_duration)} 秒（约 100 个点）"
         else:
@@ -999,10 +1002,12 @@ class MainWindow(QMainWindow):
 
     def _update_auto_setting_input_states(self, _value=None) -> None:
         """自动选项开启时禁用对应的手动输入行。"""
-        full_save_mode = self.full_save_mode_row.is_checked()
+        continuous_recording = self.continuous_recording_row.is_checked()
         self.curve_seconds_row.set_row_enabled(not self.auto_curve_visible_row.is_checked())
-        self.auto_save_duration_row.set_row_enabled(not full_save_mode)
-        self.save_duration_row.set_row_enabled(not full_save_mode and not self.auto_save_duration_row.is_checked())
+        self.auto_save_duration_row.set_row_enabled(not continuous_recording)
+        self.save_duration_row.set_row_enabled(
+            not continuous_recording and not self.auto_save_duration_row.is_checked()
+        )
         self.save_interval_row.set_row_enabled(not self.auto_save_interval_row.is_checked())
         self._update_save_interval_estimate_label()
 
@@ -1033,7 +1038,7 @@ class MainWindow(QMainWindow):
         self.show_raw_serial_view_row.set_checked(settings.show_raw_serial_view)
         self.save_duration_row.set_value_text(self._format_float(settings.save_duration_seconds))
         self.save_interval_row.set_value_text(self._format_float(settings.save_interval_seconds))
-        self.full_save_mode_row.set_checked(settings.full_save_mode)
+        self.continuous_recording_row.set_checked(settings.continuous_recording)
         self.auto_save_interval_row.set_checked(settings.auto_save_interval)
         self.auto_save_duration_row.set_checked(settings.auto_save_duration)
         self._update_auto_setting_input_states()
@@ -1143,7 +1148,7 @@ class MainWindow(QMainWindow):
                 auto_save_interval=DEFAULT_AUTO_SAVE_INTERVAL,
                 auto_save_duration=DEFAULT_AUTO_SAVE_DURATION,
                 auto_curve_visible_seconds=DEFAULT_AUTO_CURVE_VISIBLE_SECONDS,
-                full_save_mode=DEFAULT_FULL_SAVE_MODE,
+                continuous_recording=DEFAULT_CONTINUOUS_RECORDING,
             )
         )
         self.status_label.setText("状态：已填入默认设置，点击保存后生效")
@@ -1155,6 +1160,13 @@ class MainWindow(QMainWindow):
 
     def _export_data(self) -> None:
         """导出所有通道/LED 的历史数据到 Excel。"""
+        if self.settings.continuous_recording:
+            if self.continuous_recorder is None:
+                self._start_continuous_recording()
+            else:
+                self._stop_continuous_recording()
+            return
+
         if not has_exportable_history(self.data_store):
             self.status_label.setText("状态：没有可保存的历史数据")
             return
@@ -1189,6 +1201,48 @@ class MainWindow(QMainWindow):
 
         self.status_label.setText(
             f"状态：已保存 {summary.files_written} 个Excel，共 {summary.rows_written} 行，到 {summary.output_dir}"
+        )
+
+    def _start_continuous_recording(self) -> None:
+        """连续记录模式下开始记录。"""
+        if self.serial_poller is None:
+            self.status_label.setText("状态：请先连接串口再开始连续记录")
+            return
+
+        output_dir = prepare_recording_dir()
+        save_interval_seconds = effective_save_interval_seconds(self.settings)
+        try:
+            self.continuous_recorder = ContinuousRecorder(output_dir, save_interval_seconds)
+        except OSError as exc:
+            self.status_label.setText(f"状态：开始记录失败：{exc}")
+            return
+
+        self.export_button.setText("停止")
+        self.settings_button.setEnabled(False)
+        self.status_label.setText(f"状态：连续记录中，共 0 行，到 {output_dir}")
+
+    def _stop_continuous_recording(self) -> None:
+        """连续记录模式下停止记录并生成 Excel。"""
+        recorder = self.continuous_recorder
+        if recorder is None:
+            return
+
+        self.export_button.setEnabled(False)
+        self.status_label.setText("状态：正在生成连续记录 Excel...")
+        QApplication.processEvents()
+        try:
+            summary = recorder.finish()
+        except OSError as exc:
+            self.status_label.setText(f"状态：生成连续记录 Excel 失败：{exc}")
+            return
+        finally:
+            self.continuous_recorder = None
+            self.export_button.setText("保存")
+            self.export_button.setEnabled(True)
+            self.settings_button.setEnabled(True)
+
+        self.status_label.setText(
+            f"状态：连续记录完成 {summary.files_written} 个Excel，共 {summary.rows_written} 行，到 {summary.output_dir}"
         )
 
     def _confirm_overwrite_export_data(self) -> bool:
@@ -1285,7 +1339,7 @@ class MainWindow(QMainWindow):
         auto_save_interval = self.auto_save_interval_row.is_checked()
         auto_save_duration = self.auto_save_duration_row.is_checked()
         auto_curve_visible_seconds = self.auto_curve_visible_row.is_checked()
-        full_save_mode = self.full_save_mode_row.is_checked()
+        continuous_recording = self.continuous_recording_row.is_checked()
 
         read_timeout = self._parse_float_setting(
             self.read_timeout_row,
@@ -1337,7 +1391,7 @@ class MainWindow(QMainWindow):
             self.save_duration_row,
             SAVE_DURATION_RANGE,
             "SAVE_DURATION_SECONDS",
-            self.settings.save_duration_seconds if auto_save_duration or full_save_mode else None,
+            self.settings.save_duration_seconds if auto_save_duration or continuous_recording else None,
         )
         save_interval = self._parse_float_setting(
             self.save_interval_row,
@@ -1376,7 +1430,11 @@ class MainWindow(QMainWindow):
             auto_save_duration=auto_save_duration,
             auto_curve_visible_seconds=auto_curve_visible_seconds,
         )
-        if not full_save_mode and not auto_save_duration and effective_save_interval_seconds(timing_settings) > save_duration:
+        if (
+            not continuous_recording
+            and not auto_save_duration
+            and effective_save_interval_seconds(timing_settings) > save_duration
+        ):
             self.save_interval_row.set_error(True)
             self.status_label.setText("状态：实际保存间隔不能大于 SAVE_DURATION_SECONDS")
             self.save_interval_row.input.setFocus()
@@ -1403,7 +1461,7 @@ class MainWindow(QMainWindow):
             auto_save_interval=auto_save_interval,
             auto_save_duration=auto_save_duration,
             auto_curve_visible_seconds=auto_curve_visible_seconds,
-            full_save_mode=full_save_mode,
+            continuous_recording=continuous_recording,
         )
 
     def _parse_float_setting(
@@ -1533,7 +1591,15 @@ class MainWindow(QMainWindow):
 
     def _handle_reading_received(self, channel: int, currents_ma: tuple[float, ...]) -> None:
         """接收后台线程推送的最新通道数据，并刷新当前页面。"""
-        self.data_store.add_channel_reading(channel, currents_ma)
+        sample_time = time()
+        self.data_store.add_channel_reading(channel, currents_ma, timestamp=sample_time)
+        if self.continuous_recorder is not None:
+            rows_added = self.continuous_recorder.record_channel_reading(channel, currents_ma, sample_time)
+            if rows_added:
+                self.status_label.setText(
+                    f"状态：连续记录中，共 {self.continuous_recorder.rows_written} 行，到 "
+                    f"{self.continuous_recorder.output_dir}"
+                )
         if channel == self.current_channel:
             self._update_cards_for_current_channel()
             self._update_curve()
@@ -1556,6 +1622,8 @@ class MainWindow(QMainWindow):
         self.serial_poller = None
         self.connect_button.setText("连接")
         self.connect_button.setEnabled(True)
+        if self.continuous_recorder is not None:
+            self.status_label.setText("状态：串口已断开，连续记录暂停，点击停止生成Excel")
 
     def _update_cards_for_current_channel(self) -> None:
         """用当前通道最新值刷新 16 个 LED 卡片。"""
@@ -1570,6 +1638,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt 事件函数沿用 Qt 命名。
         """关闭窗口前停止后台串口线程，避免进程残留。"""
+        if self.continuous_recorder is not None:
+            self.continuous_recorder.close()
         if self.serial_poller is not None:
             self.serial_poller.stop()
             self.serial_poller.wait(1000)

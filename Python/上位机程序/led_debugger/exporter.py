@@ -149,6 +149,11 @@ def _xlsx_path(output_dir: Path, channel: int, led_index: int) -> Path:
     return output_dir / f"通道{channel}" / f"LED电流{led_index}.xlsx"
 
 
+def write_history_xlsx(path: Path, points: list[HistoryPoint]) -> None:
+    """写入单个 LED 的历史数据 Excel。"""
+    _write_xlsx(path, points)
+
+
 def _write_xlsx(path: Path, points: list[HistoryPoint]) -> None:
     workbook = Workbook()
     sheet = workbook.active

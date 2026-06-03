@@ -29,7 +29,7 @@ DEFAULT_SAVE_INTERVAL_SECONDS = 10.0
 DEFAULT_AUTO_SAVE_INTERVAL = True
 DEFAULT_AUTO_SAVE_DURATION = True
 DEFAULT_AUTO_CURVE_VISIBLE_SECONDS = True
-DEFAULT_FULL_SAVE_MODE = False
+DEFAULT_CONTINUOUS_RECORDING = False
 
 READ_TIMEOUT_RANGE = (0.05, 2.0)
 ROUND_DELAY_RANGE = (0.0, 1.0)
@@ -70,7 +70,7 @@ class AppSettings:
     auto_save_interval: bool = DEFAULT_AUTO_SAVE_INTERVAL
     auto_save_duration: bool = DEFAULT_AUTO_SAVE_DURATION
     auto_curve_visible_seconds: bool = DEFAULT_AUTO_CURVE_VISIBLE_SECONDS
-    full_save_mode: bool = DEFAULT_FULL_SAVE_MODE
+    continuous_recording: bool = DEFAULT_CONTINUOUS_RECORDING
 
 
 def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
@@ -117,7 +117,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
             auto_curve_visible_seconds=bool(
                 values.get("auto_curve_visible_seconds", DEFAULT_AUTO_CURVE_VISIBLE_SECONDS)
             ),
-            full_save_mode=bool(values.get("full_save_mode", DEFAULT_FULL_SAVE_MODE)),
+            continuous_recording=bool(values.get("continuous_recording", DEFAULT_CONTINUOUS_RECORDING)),
         )
     except (TypeError, ValueError):
         return AppSettings()
@@ -156,7 +156,7 @@ def normalize_settings(settings: AppSettings) -> AppSettings:
         auto_save_interval=bool(settings.auto_save_interval),
         auto_save_duration=bool(settings.auto_save_duration),
         auto_curve_visible_seconds=bool(settings.auto_curve_visible_seconds),
-        full_save_mode=bool(settings.full_save_mode),
+        continuous_recording=bool(settings.continuous_recording),
     )
 
 

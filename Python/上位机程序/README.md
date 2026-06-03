@@ -11,6 +11,8 @@ Python + PySide6 编写的 Windows 上位机调试程序，用于通过串口读
 - 点击某个 LED 卡片后，右侧显示该 LED 的实时历史曲线
 - 左右箭头切换通道
 - 后台持续轮询 16 个通道，切换通道时直接显示已采集数据
+- 支持保存 16 通道 x 16 路 LED 电流数据为 Excel 文件
+- 支持连续记录模式，适合长时间测试，点击保存开始记录，点击停止后生成 Excel
 - 启动时检查 `requirements.txt` 依赖，缺失时弹窗提示并支持自动安装
 
 ## 安装依赖
@@ -29,6 +31,15 @@ pip install -r requirements.txt
 cd "D:\Microsoft VS Code Projects\Python\上位机程序"
 python app.py
 ```
+
+## 打包程序
+
+```powershell
+pip install pyinstaller
+pyinstaller --noconfirm "LED亮度检测上位机.spec"
+```
+
+打包完成后，把整个 `dist\LED亮度检测上位机` 文件夹压缩发送给同事，不要只发送单独的 `.exe`。打包版会直接使用 `_internal` 中的依赖文件，不再执行开发环境的 `requirements.txt` 依赖检查。
 
 ## 串口使用
 
@@ -53,6 +64,36 @@ A5 5A XX 02 02 00 00 SUM
 
 `SUM` 为从帧头开始逐字节累加后取低 8 位。
 
+## 数据保存
+
+普通保存模式下，点击 `保存` 会导出最近一段历史数据，保存路径为：
+
+```text
+data\YYYY_MM_DD\通道1\LED电流1.xlsx
+data\YYYY_MM_DD\通道1\LED电流2.xlsx
+...
+data\YYYY_MM_DD\通道16\LED电流16.xlsx
+```
+
+连续记录模式在 `设置` -> `高级设置` 中开启。开启后：
+
+- `保存` 按钮变为开始记录。
+- 记录过程中按钮显示为 `停止`。
+- 点击 `停止` 后生成 Excel 文件。
+- 保存时长设置不生效，程序会从开始记录一直保存到手动停止。
+- 保存目录按开始记录时间生成，例如：
+
+```text
+data\YYYY_MM_DD\record_HHMMSS\通道1\LED电流1.xlsx
+data\YYYY_MM_DD\record_HHMMSS\通道1\LED电流2.xlsx
+...
+data\YYYY_MM_DD\record_HHMMSS\通道16\LED电流16.xlsx
+```
+
+如果同一秒内重新开始连续记录，会复用同名 `record_HHMMSS` 目录并覆盖上一轮记录。
+
+Excel 文件中第一列为真实采样时间，格式为 `HH:MM:SS.mmm`；第二列为电流值，单位 `mA`。
+
 ## 测试
 
 ```powershell
@@ -68,6 +109,8 @@ python -m pytest tests
 - 通道范围检查
 - 历史曲线数据缓存
 - 依赖检查解析逻辑
+- Excel 导出
+- 连续记录临时 CSV 与 Excel 生成
 
 ## 人工预览依赖检查弹窗
 
