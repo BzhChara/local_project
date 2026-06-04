@@ -117,51 +117,83 @@ def raw_csv_to_excel(csv_path: str, excel_path: str):
 
 
 def create_stable_excel(path: str, target_indices=None):
-    selected_indices = _selected_indices(target_indices)
     wb = Workbook()
     ws = wb.active
     ws.title = "Sheet1"
-
-    for row_idx, idx in enumerate(selected_indices, start=1):
-        ws.cell(row=row_idx, column=1, value=f"CH{idx + 1}")
-
-    stats_start = len(selected_indices) + 2
-    for offset, label in enumerate(["最小值", "最大值", "平均数", "CV"]):
-        ws.cell(row=stats_start + offset, column=1, value=label)
-
-    ws.column_dimensions["A"].width = 12
-    ws.column_dimensions["B"].width = 14
-
-    for row in ws.iter_rows():
-        for cell in row:
-            cell.font = Font(name=EXCEL_FONT_NAME, size=12, bold=cell.column == 1)
-
-    wb.save(path)
+    refresh_stable_excel(wb, ws, path, [[] for _ in range(24)], target_indices)
     return wb, ws
 
 
-def refresh_stable_excel(wb: Workbook, ws, path: str, stable_values: list[float | None], target_indices=None):
+def _stable_history(stable_values: list, idx: int):
+    value = stable_values[idx]
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _stats(values: list[float]):
+    if not values:
+        return [None, None, None, None]
+    avg_value = sum(values) / len(values)
+    std_value = (sum((value - avg_value) ** 2 for value in values) / len(values)) ** 0.5
+    cv_value = std_value / avg_value if avg_value else 0
+    return [min(values), max(values), avg_value, cv_value]
+
+
+def _write_cell(ws, row: int, column: int, value, bold: bool = False, cv: bool = False):
+    cell = ws.cell(row=row, column=column, value=value)
+    cell.font = Font(name=EXCEL_FONT_NAME, size=12, bold=bold)
+    if isinstance(value, (int, float)):
+        cell.number_format = "0.00%" if cv else "0.000000"
+    return cell
+
+
+def _reset_sheet(ws):
+    if ws.max_row:
+        ws.delete_rows(1, ws.max_row)
+    if ws.max_column:
+        ws.delete_cols(1, ws.max_column)
+
+
+def refresh_stable_excel(wb: Workbook, ws, path: str, stable_values: list, target_indices=None):
     selected_indices = _selected_indices(target_indices)
+    histories = {idx: _stable_history(stable_values, idx) for idx in selected_indices}
+    max_count = max((len(values) for values in histories.values()), default=0)
+    measurement_count = max(max_count, 1)
+    stats_col = measurement_count + 3
+    bottom_stats_start = len(selected_indices) + 3
 
-    for row_idx, idx in enumerate(selected_indices, start=1):
-        cell = ws.cell(row=row_idx, column=2, value=stable_values[idx])
-        cell.font = Font(name=EXCEL_FONT_NAME, size=12)
-        cell.number_format = "0.000000"
+    _reset_sheet(ws)
 
-    values = [stable_values[idx] for idx in selected_indices if stable_values[idx] is not None]
+    _write_cell(ws, 1, 1, "通道", bold=True)
+    for attempt in range(measurement_count):
+        _write_cell(ws, 1, 2 + attempt, f"第{attempt + 1}次", bold=True)
 
-    stats_start = len(selected_indices) + 2
-    if values:
-        avg_value = sum(values) / len(values)
-        std_value = (sum((value - avg_value) ** 2 for value in values) / len(values)) ** 0.5
-        cv_value = std_value / avg_value if avg_value else 0
-        stats = [min(values), max(values), avg_value, cv_value]
-    else:
-        stats = [None, None, None, None]
+    for offset, label in enumerate(["最小值", "最大值", "平均数", "CV"]):
+        _write_cell(ws, 1, stats_col + offset, label, bold=True)
 
-    for offset, value in enumerate(stats):
-        cell = ws.cell(row=stats_start + offset, column=2, value=value)
-        cell.font = Font(name=EXCEL_FONT_NAME, size=12)
-        cell.number_format = "0.00%" if offset == 3 else "0.000000"
+    for row_idx, idx in enumerate(selected_indices, start=2):
+        history = histories[idx]
+        _write_cell(ws, row_idx, 1, f"CH{idx + 1}", bold=True)
+        for attempt, value in enumerate(history, start=1):
+            _write_cell(ws, row_idx, 1 + attempt, value)
+
+        for offset, value in enumerate(_stats(history)):
+            _write_cell(ws, row_idx, stats_col + offset, value, cv=offset == 3)
+
+    for offset, label in enumerate(["最小值", "最大值", "平均数", "CV"]):
+        _write_cell(ws, bottom_stats_start + offset, 1, label, bold=True)
+        for attempt in range(measurement_count):
+            values = [history[attempt] for history in histories.values() if len(history) > attempt]
+            _write_cell(ws, bottom_stats_start + offset, 2 + attempt, _stats(values)[offset], cv=offset == 3)
+
+    ws.column_dimensions["A"].width = 12
+    for col_idx in range(2, stats_col + 4):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = 14
+
+    ws.column_dimensions["A"].width = 12
 
     wb.save(path)

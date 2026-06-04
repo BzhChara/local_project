@@ -111,7 +111,7 @@ class SerialTestWorker(QThread):
 
         if target_ratio is not None:
             stable_wb, stable_ws = create_stable_excel(stable_output_path, target_indices)
-            stable_values = [None for _ in range(24)]
+            stable_values = [[] for _ in range(24)]
 
         row_count = 0
         stable_count = 0
@@ -232,7 +232,7 @@ class SerialTestWorker(QThread):
                         sample_range = max(stable_windows[idx]) - min(stable_windows[idx])
                         if sample_range < STABLE_RANGE:
                             final_value = round(sum(stable_windows[idx]) / STABLE_COUNT, 6)
-                            stable_values[idx] = final_value
+                            stable_values[idx].append(final_value)
                             waiting_for_air[idx] = True
                             stable_windows[idx].clear()
                             air_return_windows[idx].clear()
@@ -245,7 +245,7 @@ class SerialTestWorker(QThread):
                             )
 
                     if stable_changed:
-                        stable_count = sum(value is not None for value in stable_values)
+                        stable_count = sum(bool(values) for values in stable_values)
                         try:
                             refresh_stable_excel(stable_wb, stable_ws, stable_output_path, stable_values, target_indices)
                         except (OSError, PermissionError, InvalidFileException) as exc:
